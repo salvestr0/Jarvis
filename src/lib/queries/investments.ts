@@ -35,7 +35,7 @@ export async function getHoldings(): Promise<Holding[]> {
   const { data, error } = await supabase
     .from('holdings')
     .select(
-      'id, kind, symbol, name, quantity, cost_basis_cents, cost_currency, price_currency, account_id, note'
+      'id, kind, symbol, name, quantity, cost_basis_cents, cost_currency, price_currency, account_id, note, manual_value_cents'
     )
     .order('kind')
     .order('symbol')
@@ -132,6 +132,7 @@ export type HoldingInput = {
   cost_currency: string
   price_currency: string
   note: string | null
+  manual_value_cents: number | null
 }
 
 export async function createHolding(input: HoldingInput): Promise<void> {

@@ -157,7 +157,7 @@ async function snapshotEveryUser(today: string): Promise<number> {
       supabase
         .from('holdings')
         .select(
-          'id, user_id, kind, symbol, name, quantity, cost_basis_cents, cost_currency, price_currency, account_id, note'
+          'id, user_id, kind, symbol, name, quantity, cost_basis_cents, cost_currency, price_currency, account_id, note, manual_value_cents'
         ),
       supabase.from('accounts').select('user_id, opening_balance_cents'),
       supabase.from('transactions').select('user_id, direction, amount_cents'),

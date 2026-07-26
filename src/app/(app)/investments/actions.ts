@@ -21,8 +21,68 @@ function readForm(
   formData: FormData
 ): { ok: true; value: HoldingInput } | { ok: false; error: string } {
   const kind = String(formData.get('kind') ?? '') as HoldingKind
-  if (kind !== 'crypto' && kind !== 'stock') {
-    return { ok: false, error: 'Pick crypto or stock.' }
+  if (kind !== 'crypto' && kind !== 'stock' && kind !== 'manual') {
+    return { ok: false, error: 'Pick crypto, stock or investment plan.' }
+  }
+
+  const name = String(formData.get('name') ?? '').trim()
+  const note = String(formData.get('note') ?? '').trim()
+
+  if (note.length > 280) {
+    return { ok: false, error: 'Note is too long (max 280 characters).' }
+  }
+
+  // Cost basis may legitimately be zero (airdrops, gifts), so an empty box
+  // means zero rather than an error.
+  const rawCost = String(formData.get('cost_basis') ?? '').trim()
+  let costCents = 0
+  if (rawCost !== '') {
+    const cost = parseMoney(rawCost)
+    if (!cost.ok) return { ok: false, error: `Cost basis: ${cost.error}` }
+    costCents = cost.cents
+  }
+
+  // Manual holdings (investment plans etc.) have no ticker, quantity or price
+  // feed — a name and a self-reported current value stand in for all three.
+  if (kind === 'manual') {
+    if (!name) return { ok: false, error: 'Give the plan a name.' }
+    if (name.length > 80) {
+      return { ok: false, error: 'Name is too long (max 80 characters).' }
+    }
+
+    // Empty value is allowed and shows as "not priced" — better than forcing
+    // a guess before the first statement arrives.
+    const rawValue = String(formData.get('manual_value') ?? '').trim()
+    let manualValueCents: number | null = null
+    if (rawValue !== '') {
+      const value = parseMoney(rawValue)
+      if (!value.ok) return { ok: false, error: `Current value: ${value.error}` }
+      manualValueCents = value.cents
+    }
+
+    // The schema still needs a unique symbol per holding; derive a stable
+    // slug from the name so the user never has to invent a fake ticker.
+    const symbol =
+      name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .slice(0, 20)
+        .replace(/^-+|-+$/g, '') || 'PLAN'
+
+    return {
+      ok: true,
+      value: {
+        kind,
+        symbol,
+        name,
+        quantity: 1,
+        cost_basis_cents: costCents,
+        cost_currency: 'SGD',
+        price_currency: 'SGD',
+        note: note === '' ? null : note,
+        manual_value_cents: manualValueCents,
+      },
+    }
   }
 
   const symbol = String(formData.get('symbol') ?? '')
@@ -39,28 +99,11 @@ function readForm(
   const quantity = parseQuantity(String(formData.get('quantity') ?? ''))
   if (!quantity.ok) return { ok: false, error: quantity.error }
 
-  // Cost basis may legitimately be zero (airdrops, gifts), so an empty box
-  // means zero rather than an error.
-  const rawCost = String(formData.get('cost_basis') ?? '').trim()
-  let costCents = 0
-  if (rawCost !== '') {
-    const cost = parseMoney(rawCost)
-    if (!cost.ok) return { ok: false, error: `Cost basis: ${cost.error}` }
-    costCents = cost.cents
-  }
-
   const priceCurrency = String(formData.get('price_currency') ?? 'USD')
     .trim()
     .toUpperCase()
   if (!/^[A-Z]{3}$/.test(priceCurrency)) {
     return { ok: false, error: 'Price currency must be a 3-letter code.' }
-  }
-
-  const name = String(formData.get('name') ?? '').trim()
-  const note = String(formData.get('note') ?? '').trim()
-
-  if (note.length > 280) {
-    return { ok: false, error: 'Note is too long (max 280 characters).' }
   }
 
   return {
@@ -74,6 +117,7 @@ function readForm(
       cost_currency: 'SGD',
       price_currency: priceCurrency,
       note: note === '' ? null : note,
+      manual_value_cents: null,
     },
   }
 }

@@ -8,7 +8,7 @@
 
 export const MICROS = 1_000_000
 
-export type HoldingKind = 'crypto' | 'stock'
+export type HoldingKind = 'crypto' | 'stock' | 'manual'
 
 export type Holding = {
   id: string
@@ -21,6 +21,12 @@ export type Holding = {
   price_currency: string
   account_id: string | null
   note: string | null
+  /**
+   * For kind 'manual' only: the current value in SGD cents, typed in from a
+   * statement rather than fetched from a market. Null means "not valued yet",
+   * which downstream code treats exactly like a missing price.
+   */
+  manual_value_cents: number | null
 }
 
 export type PriceEntry = {
@@ -85,7 +91,10 @@ export function buildPositions(
           h.cost_basis_cents)
 
     let marketValueCents: number | null = null
-    if (price) {
+    if (h.kind === 'manual') {
+      // Self-reported value, already in SGD cents — no price feed, no FX.
+      marketValueCents = h.manual_value_cents
+    } else if (price) {
       const valueNative = h.quantity * (price.priceMicros / MICROS)
       marketValueCents = toSgdCents(valueNative, price.currency, usdSgd)
     }

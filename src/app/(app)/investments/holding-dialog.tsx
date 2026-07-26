@@ -66,79 +66,134 @@ export function HoldingDialog({
         <form action={formAction} className="space-y-4">
           {existing ? <input type="hidden" name="id" value={existing.id} /> : null}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-kind`}>Type</Label>
-              <NativeSelect
-                id={`${formId}-kind`}
-                name="kind"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as 'crypto' | 'stock')}
-              >
-                <option value="crypto">Crypto</option>
-                <option value="stock">Stock / ETF</option>
-              </NativeSelect>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-symbol`}>Ticker</Label>
-              <Input
-                id={`${formId}-symbol`}
-                name="symbol"
-                placeholder={kind === 'crypto' ? 'BTC' : 'AAPL'}
-                defaultValue={existing?.symbol ?? ''}
-                autoCapitalize="characters"
-                required
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-quantity`}>Quantity</Label>
-            <Input
-              id={`${formId}-quantity`}
-              name="quantity"
-              inputMode="decimal"
-              placeholder={kind === 'crypto' ? '0.0035' : '10'}
-              defaultValue={existing ? formatQuantity(existing.quantity) : ''}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Fractional amounts are fine — up to 10 decimal places.
-            </p>
+            <Label htmlFor={`${formId}-kind`}>Type</Label>
+            <NativeSelect
+              id={`${formId}-kind`}
+              name="kind"
+              value={kind}
+              onChange={(e) =>
+                setKind(e.target.value as 'crypto' | 'stock' | 'manual')
+              }
+            >
+              <option value="crypto">Crypto</option>
+              <option value="stock">Stock / ETF</option>
+              <option value="manual">Investment plan / other (manual value)</option>
+            </NativeSelect>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-cost`}>Total cost (SGD)</Label>
-              <Input
-                id={`${formId}-cost`}
-                name="cost_basis"
-                inputMode="decimal"
-                placeholder="0.00"
-                defaultValue={
-                  existing ? centsToInput(existing.cost_basis_cents) : ''
-                }
-              />
-            </div>
+          {kind === 'manual' ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-name`}>Name</Label>
+                <Input
+                  id={`${formId}-name`}
+                  name="name"
+                  maxLength={80}
+                  placeholder="e.g. Great Eastern ILP"
+                  defaultValue={existing?.name ?? ''}
+                  required
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-pricecur`}>Priced in</Label>
-              <NativeSelect
-                id={`${formId}-pricecur`}
-                name="price_currency"
-                defaultValue={existing?.price_currency ?? 'USD'}
-              >
-                <option value="USD">USD</option>
-                <option value="SGD">SGD</option>
-              </NativeSelect>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor={`${formId}-value`}>Current value (SGD)</Label>
+                  <Input
+                    id={`${formId}-value`}
+                    name="manual_value"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    defaultValue={
+                      existing?.manual_value_cents != null
+                        ? centsToInput(existing.manual_value_cents)
+                        : ''
+                    }
+                  />
+                </div>
 
-          <p className="text-xs text-muted-foreground">
-            Total cost is everything you paid in SGD, all buys added together —
-            that&apos;s what your profit is measured against.
-          </p>
+                <div className="space-y-2">
+                  <Label htmlFor={`${formId}-cost`}>Total paid in (SGD)</Label>
+                  <Input
+                    id={`${formId}-cost`}
+                    name="cost_basis"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    defaultValue={
+                      existing ? centsToInput(existing.cost_basis_cents) : ''
+                    }
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Current value comes from your latest statement — update it here
+                whenever a new one arrives. Total paid in is every premium so
+                far; profit is measured against it.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-symbol`}>Ticker</Label>
+                <Input
+                  id={`${formId}-symbol`}
+                  name="symbol"
+                  placeholder={kind === 'crypto' ? 'BTC' : 'AAPL'}
+                  defaultValue={existing?.symbol ?? ''}
+                  autoCapitalize="characters"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-quantity`}>Quantity</Label>
+                <Input
+                  id={`${formId}-quantity`}
+                  name="quantity"
+                  inputMode="decimal"
+                  placeholder={kind === 'crypto' ? '0.0035' : '10'}
+                  defaultValue={existing ? formatQuantity(existing.quantity) : ''}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Fractional amounts are fine — up to 10 decimal places.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor={`${formId}-cost`}>Total cost (SGD)</Label>
+                  <Input
+                    id={`${formId}-cost`}
+                    name="cost_basis"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    defaultValue={
+                      existing ? centsToInput(existing.cost_basis_cents) : ''
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`${formId}-pricecur`}>Priced in</Label>
+                  <NativeSelect
+                    id={`${formId}-pricecur`}
+                    name="price_currency"
+                    defaultValue={existing?.price_currency ?? 'USD'}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="SGD">SGD</option>
+                  </NativeSelect>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Total cost is everything you paid in SGD, all buys added
+                together — that&apos;s what your profit is measured against.
+              </p>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor={`${formId}-note`}>Note (optional)</Label>

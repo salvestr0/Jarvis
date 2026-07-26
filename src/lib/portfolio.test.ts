@@ -23,6 +23,7 @@ function holding(over: Partial<Holding> = {}): Holding {
     price_currency: 'USD',
     account_id: null,
     note: null,
+    manual_value_cents: null,
     ...over,
   }
 }
@@ -168,4 +169,44 @@ test('formats quantities without trailing zeros', () => {
   assert.equal(formatQuantity(0.5), '0.5')
   assert.equal(formatQuantity(10), '10')
   assert.equal(formatQuantity(0.0035), '0.0035')
+})
+
+test('a manual holding is valued at its self-reported value', () => {
+  // S$12,000 paid into a plan currently worth S$10,500 — a real ILP scenario.
+  const positions = buildPositions(
+    [
+      holding({
+        kind: 'manual',
+        symbol: 'MY-PLAN',
+        name: 'My plan',
+        quantity: 1,
+        cost_basis_cents: 1_200_000,
+        cost_currency: 'SGD',
+        price_currency: 'SGD',
+        manual_value_cents: 1_050_000,
+      }),
+    ],
+    new Map(),
+    null // no FX rate needed — manual values are already SGD
+  )
+
+  const p = positions[0]
+  assert.equal(p.marketValueCents, 1_050_000)
+  assert.equal(p.gainCents, -150_000)
+  assert.equal(portfolioTotals(positions).marketValueCents, 1_050_000)
+})
+
+test('a manual holding with no value yet counts as unpriced, not zero', () => {
+  const positions = buildPositions(
+    [holding({ kind: 'manual', cost_basis_cents: 500_000, manual_value_cents: null })],
+    new Map(),
+    null
+  )
+
+  assert.equal(positions[0].marketValueCents, null)
+  // Its cost must not drag totals down as a fake loss (same rule as an
+  // unpriced ticker holding).
+  const totals = portfolioTotals(positions)
+  assert.equal(totals.unpricedCount, 1)
+  assert.equal(totals.costBasisCents, 0)
 })

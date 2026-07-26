@@ -28,8 +28,8 @@ export function NavLinks({
             className={cn(
               'rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors',
               active
-                ? 'bg-muted font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-primary/10 font-medium text-primary'
+                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
             )}
           >
             {item.label}

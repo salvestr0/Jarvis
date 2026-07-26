@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { signOut } from '@/app/login/actions'
 
 import { NavLinks } from './nav-links'
+import { ThemeToggle } from './theme-toggle'
 
 export const NAV_ITEMS = [
   { href: '/', label: 'Dashboard' },
@@ -11,6 +12,8 @@ export const NAV_ITEMS = [
   { href: '/investments', label: 'Investments' },
   { href: '/career', label: 'Career' },
   { href: '/projects', label: 'Projects' },
+  { href: '/goals', label: 'Goals' },
+  { href: '/tasks', label: 'Tasks' },
   { href: '/settings', label: 'Settings' },
 ] as const
 
@@ -23,7 +26,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3">
           <Link href="/" className="font-semibold tracking-tight">
             Jarvis
@@ -31,12 +34,13 @@ export function AppShell({
 
           <NavLinks items={NAV_ITEMS} />
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-1.5">
             {email ? (
               <span className="hidden text-xs text-muted-foreground sm:inline">
                 {email}
               </span>
             ) : null}
+            <ThemeToggle />
             <form action={signOut}>
               <Button type="submit" variant="ghost" size="sm">
                 Sign out

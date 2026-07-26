@@ -18,6 +18,11 @@ import { DeleteForm } from '@/components/delete-form'
 import { removeHolding } from './actions'
 import { HoldingDialog } from './holding-dialog'
 
+/** Manual holdings go by their plan name; tickers speak for themselves. */
+function displayName(p: Position): string {
+  return p.kind === 'manual' ? (p.name ?? p.symbol) : p.symbol
+}
+
 /**
  * Gain or loss, shown with an arrow AND a sign — never colour alone.
  *
@@ -146,7 +151,7 @@ export function Allocation({ positions }: { positions: Position[] }) {
             return (
               <li key={p.id}>
                 <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="truncate font-medium">{p.symbol}</span>
+                  <span className="truncate font-medium">{displayName(p)}</span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
                     {formatMoney(value)}
                     <span className="ml-1.5 text-xs">{share.toFixed(1)}%</span>
@@ -200,22 +205,28 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
             <TableRow key={p.id}>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{p.symbol}</span>
+                  <span className="font-medium">{displayName(p)}</span>
                   <Badge variant="secondary" className="hidden sm:inline-flex">
-                    {p.kind}
+                    {p.kind === 'manual' ? 'plan' : p.kind}
                   </Badge>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
-                  {formatQuantity(p.quantity)} units
-                </p>
+                {p.kind !== 'manual' ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                    {formatQuantity(p.quantity)} units
+                  </p>
+                ) : null}
               </TableCell>
 
               <TableCell className="hidden tabular-nums text-muted-foreground sm:table-cell">
-                {formatQuantity(p.quantity)}
+                {p.kind === 'manual' ? '—' : formatQuantity(p.quantity)}
               </TableCell>
 
               <TableCell className="hidden tabular-nums text-muted-foreground md:table-cell">
-                {p.priceMicros === null ? (
+                {p.kind === 'manual' ? (
+                  <span title="Value comes from your statement — edit the holding to update it">
+                    self-tracked
+                  </span>
+                ) : p.priceMicros === null ? (
                   <span title="Hit Refresh prices">not priced</span>
                 ) : (
                   <>
