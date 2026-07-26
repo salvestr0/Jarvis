@@ -1,4 +1,9 @@
-# Jarvis Tracker — Todo
+# Jarvis — Todo
+
+**Goal:** a personal assistant that knows everything about the user.
+Phase 1 (this repo) is the memory layer — income, investments, net worth,
+career, projects. Phase 2 is a Telegram interface backed by a frontier model
+API, calling the same `src/lib/queries/` functions as tools.
 
 Plan: `C:\Users\User\.claude\plans\precious-doodling-kurzweil.md`
 

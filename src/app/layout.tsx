@@ -16,8 +16,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Jarvis Tracker',
-  description: 'Private personal tracker — money, investments, career, projects.',
+  title: 'Jarvis',
+  description:
+    'A personal assistant that knows you — money, investments, career, projects.',
 }
 
 export default function RootLayout({

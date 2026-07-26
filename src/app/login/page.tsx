@@ -11,7 +11,7 @@ import {
 import { LoginForm } from './login-form'
 
 export const metadata: Metadata = {
-  title: 'Sign in — Jarvis Tracker',
+  title: 'Sign in — Jarvis',
 }
 
 // searchParams is async in Next.js 16 — synchronous access was removed.
@@ -31,7 +31,7 @@ export default async function LoginPage({
     <main className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Jarvis Tracker</CardTitle>
+          <CardTitle>Jarvis</CardTitle>
           <CardDescription>Private. One account only.</CardDescription>
         </CardHeader>
         <CardContent>
