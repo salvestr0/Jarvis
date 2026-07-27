@@ -17,7 +17,7 @@ import { getFacts, type Fact } from '@/lib/queries/facts'
  * and every step is inspectable in the Vercel function logs.
  */
 
-const MODEL = 'claude-opus-5'
+const MODEL = 'claude-sonnet-5'
 // Caps thinking + text combined. Answers are short; the ceiling is for the
 // tool-calling turns in the middle, not the final reply.
 const MAX_TOKENS = 8192

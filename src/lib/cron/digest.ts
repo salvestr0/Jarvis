@@ -94,7 +94,7 @@ async function composeDigest(
 ): Promise<{ text: string; composedBy: 'claude' | 'fallback' }> {
   try {
     const response = await getClient().messages.create({
-      model: 'claude-opus-5',
+      model: 'claude-sonnet-5',
       max_tokens: 1024,
       output_config: { effort: 'low' },
       system: [
