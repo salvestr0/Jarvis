@@ -52,6 +52,58 @@ async function callTelegram(method: string, body: unknown): Promise<void> {
   }
 }
 
+/**
+ * Download a file the user sent (voice notes). Two steps by Telegram's
+ * design: getFile resolves the id to a path, then the path is fetched from
+ * a different host. Both URLs carry the bot token, so neither is ever put in
+ * an error message.
+ */
+export async function downloadFile(fileId: string): Promise<Uint8Array> {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not set.')
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const infoRes = await fetch(botUrl('getFile'), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+      cache: 'no-store',
+    })
+    const info = (await infoRes.json().catch(() => null)) as {
+      ok?: boolean
+      result?: { file_path?: string }
+      description?: string
+    } | null
+
+    const path = info?.result?.file_path
+    if (!infoRes.ok || !path) {
+      throw new Error(
+        `Telegram getFile failed (HTTP ${infoRes.status}): ${info?.description ?? 'no file path'}`
+      )
+    }
+
+    const fileRes = await fetch(
+      `https://api.telegram.org/file/bot${token}/${path}`,
+      { signal: controller.signal, cache: 'no-store' }
+    )
+    if (!fileRes.ok) {
+      throw new Error(`Telegram file download failed (HTTP ${fileRes.status})`)
+    }
+    return new Uint8Array(await fileRes.arrayBuffer())
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Telegram file download timed out after ${TIMEOUT_MS / 1000}s`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Send one plain-text message (no parse_mode — see telegram/format.ts). */
 export async function sendMessage(chatId: number, text: string): Promise<void> {
   await callTelegram('sendMessage', { chat_id: chatId, text })

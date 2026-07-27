@@ -109,7 +109,15 @@ API is down, a deterministic fallback renders the same facts; the briefing
 always goes out. It also lands in chat history, so "wait, which bill?" just
 works.
 
-**You control it at /settings**: every morning, only when something's
+**Talk to it.** Voice notes are transcribed (Whisper via Groq — Claude's API
+takes text, images and PDFs, not audio) and answered like any message.
+Jarvis echoes what it heard before acting, so a mis-heard amount never
+becomes a silent wrong transaction.
+
+**It can search the web** when the answer depends on current information —
+prices, rates, news — and blend that with what it knows about you.
+
+**You control the digest at /settings**: every morning, only when something's
 noteworthy, or off — plus which sections it covers. The signal thresholds are
 pure functions with unit tests (`src/lib/jarvis/signals.ts`), because silent
 threshold logic is where alert systems rot.

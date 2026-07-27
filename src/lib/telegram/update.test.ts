@@ -22,13 +22,37 @@ test('accepts a plain private text message', () => {
   assert.deepEqual(parsed, {
     chatId: 12345,
     fromId: 12345,
+    kind: 'text',
     text: 'what is my net worth?',
   })
 })
 
 test('trims surrounding whitespace from the text', () => {
   const parsed = parseUpdate(validUpdate({ text: '  log $12 lunch \n' }))
-  assert.equal(parsed?.text, 'log $12 lunch')
+  assert.equal(parsed?.kind === 'text' && parsed.text, 'log $12 lunch')
+})
+
+test('accepts a voice note and carries its file id and duration', () => {
+  const parsed = parseUpdate(
+    validUpdate({
+      text: undefined,
+      voice: { file_id: 'AwACAgU', duration: 7, mime_type: 'audio/ogg' },
+    })
+  )
+  assert.deepEqual(parsed, {
+    chatId: 12345,
+    fromId: 12345,
+    kind: 'voice',
+    fileId: 'AwACAgU',
+    duration: 7,
+  })
+})
+
+test('a voice note without a file id is not usable', () => {
+  assert.equal(
+    parseUpdate(validUpdate({ text: undefined, voice: { duration: 7 } })),
+    null
+  )
 })
 
 test('rejects group and channel chats — replies must stay private', () => {
@@ -44,8 +68,12 @@ test('rejects edited messages — answering them would double-log', () => {
   assert.equal(parseUpdate(edited), null)
 })
 
-test('rejects non-text messages (photos, stickers)', () => {
+test('rejects non-text, non-voice messages (photos, stickers)', () => {
   assert.equal(parseUpdate(validUpdate({ text: undefined })), null)
+  assert.equal(
+    parseUpdate(validUpdate({ text: undefined, sticker: { file_id: 'x' } })),
+    null
+  )
 })
 
 test('rejects empty and whitespace-only text', () => {

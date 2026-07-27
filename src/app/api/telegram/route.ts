@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { after } from 'next/server'
 
 import { runJarvis } from '@/lib/jarvis/agent'
-import { sendMessage, sendTyping } from '@/lib/telegram/api'
+import { downloadFile, sendMessage, sendTyping } from '@/lib/telegram/api'
 import { chunkTelegramMessage } from '@/lib/telegram/format'
 import { parseUpdate } from '@/lib/telegram/update'
+import { MAX_VOICE_SECONDS, transcribeVoice } from '@/lib/transcribe'
 
 /**
  * Telegram webhook — the bot's front door.
@@ -51,11 +52,30 @@ export async function POST(request: NextRequest) {
   if (!update) return NextResponse.json({ ok: true })
   if (String(update.fromId) !== allowedId) return NextResponse.json({ ok: true })
 
-  const { chatId, text } = update
+  const { chatId } = update
 
   after(async () => {
     try {
       await sendTyping(chatId)
+
+      let text: string
+      if (update.kind === 'voice') {
+        if (update.duration > MAX_VOICE_SECONDS) {
+          await sendMessage(
+            chatId,
+            `That note is ${update.duration}s — a bit long for me. Send something under ${MAX_VOICE_SECONDS / 60} minutes.`
+          )
+          return
+        }
+        text = await transcribeVoice(await downloadFile(update.fileId))
+        // Echo what was heard: a mis-transcribed amount should be visible
+        // before Jarvis acts on it, not after.
+        await sendMessage(chatId, `🎤 "${text}"`)
+        await sendTyping(chatId)
+      } else {
+        text = update.text
+      }
+
       const reply = await runJarvis(text)
       for (const chunk of chunkTelegramMessage(reply)) {
         await sendMessage(chatId, chunk)

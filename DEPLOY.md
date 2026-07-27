@@ -227,6 +227,24 @@ sections it covers) lives at **/settings**.
 
 ---
 
+## 9. Voice notes
+
+Send Jarvis a voice message instead of typing. Claude's API doesn't take
+audio, so transcription runs through Groq (Whisper large-v3-turbo) — free
+tier, no credit card.
+
+1. Sign up at [console.groq.com](https://console.groq.com) → **API Keys** →
+   create one.
+2. Put it in `.env.local` as `GROQ_API_KEY`, and add the same value to the
+   Vercel project (server-only, never `NEXT_PUBLIC_`).
+
+Jarvis echoes what it heard (`🎤 "log twelve dollars lunch"`) before acting,
+so a mis-heard amount is visible before it becomes a transaction. Notes
+longer than 5 minutes are refused. Leaving the key blank disables voice
+without affecting anything else.
+
+---
+
 ## After every change
 
 ```bash

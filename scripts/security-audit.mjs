@@ -72,6 +72,7 @@ const SECRET_KEYS = [
   'TELEGRAM_WEBHOOK_SECRET',
   'GOOGLE_CLIENT_SECRET',
   'GOOGLE_REFRESH_TOKEN',
+  'GROQ_API_KEY',
 ]
 
 const secrets = SECRET_KEYS.map((k) => [k, env[k]]).filter(
