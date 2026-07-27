@@ -30,7 +30,14 @@ import {
   summariseMonth,
   totalsByCategory,
 } from '@/lib/queries/money'
-import { getMetrics, getProjects, withProgress } from '@/lib/queries/projects'
+import {
+  getMetrics,
+  getProjects,
+  recordMetric,
+  setProjectStatus,
+  withProgress,
+  type ProjectStatus,
+} from '@/lib/queries/projects'
 import { getRecurring } from '@/lib/queries/recurring'
 import {
   createTask,
@@ -305,6 +312,7 @@ export async function executeTool(
       ])
       return JSON.stringify({
         projects: withProgress(projects, metrics).map((p) => ({
+          id: p.id,
           name: p.name,
           status: p.status,
           kind: p.kind,
@@ -449,6 +457,49 @@ export async function executeTool(
         db
       )
       return JSON.stringify({ created: { title, horizon, target_date } })
+    }
+
+    case 'set_project_status': {
+      const status = oneOf(
+        requiredString(input, 'status'),
+        ['idea', 'building', 'beta', 'launched', 'paused', 'archived'] as const,
+        'status'
+      ) as ProjectStatus
+      await setProjectStatus(requiredString(input, 'project_id'), status, db)
+      return JSON.stringify({ updated: { status } })
+    }
+
+    case 'record_project_metric': {
+      const mrrRaw = requiredString(input, 'mrr')
+      // parseMoney rejects zero on purpose (a $0 transaction is a mistake),
+      // but an MRR of 0 is a legitimate report — allow it explicitly.
+      let mrr_cents: number
+      if (/^\$?\s*0(\.0{1,2})?$/.test(mrrRaw)) {
+        mrr_cents = 0
+      } else {
+        const parsed = parseMoney(mrrRaw)
+        if (!parsed.ok) throw new Error(parsed.error)
+        mrr_cents = parsed.cents
+      }
+
+      const usersRaw = input.users
+      const users_count =
+        typeof usersRaw === 'number' && Number.isFinite(usersRaw)
+          ? Math.max(0, Math.round(usersRaw))
+          : null
+
+      await recordMetric(
+        {
+          project_id: requiredString(input, 'project_id'),
+          as_of: todayISO(),
+          mrr_cents,
+          users_count,
+        },
+        db
+      )
+      return JSON.stringify({
+        recorded: { as_of: todayISO(), mrr: money(mrr_cents), users: users_count },
+      })
     }
 
     case 'set_goal_status': {

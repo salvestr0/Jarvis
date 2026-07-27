@@ -280,6 +280,43 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'set_project_status',
+    description:
+      'Call this when the user says a project changed stage ("mark X as launched", "pause Y"). Get the project_id from get_projects first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'The project id from get_projects' },
+        status: {
+          type: 'string',
+          enum: ['idea', 'building', 'beta', 'launched', 'paused', 'archived'],
+        },
+      },
+      required: ['project_id', 'status'],
+    },
+  },
+  {
+    name: 'record_project_metric',
+    description:
+      "Call this when the user reports a project's numbers (\"X hit $200 MRR\", \"Y has 50 users now\"). Records today's MRR and user count for the project; recording twice on the same day overwrites. Get the project_id from get_projects first.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'The project id from get_projects' },
+        mrr: {
+          type: 'string',
+          description:
+            'Monthly recurring revenue as the user wrote it, e.g. "200", "$1,250.50", or "0". Do NOT convert to a number.',
+        },
+        users: {
+          type: 'integer',
+          description: 'Current user count. Omit if not mentioned.',
+        },
+      },
+      required: ['project_id', 'mrr'],
+    },
+  },
+  {
     name: 'set_goal_status',
     description:
       'Call this when the user achieved or dropped a goal, or wants to reactivate one. Get the goal_id from get_goals first.',

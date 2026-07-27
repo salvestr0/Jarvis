@@ -142,6 +142,22 @@ export async function deleteProject(id: string): Promise<void> {
   if (error) throw new Error(`Could not delete: ${error.message}`)
 }
 
+export async function setProjectStatus(
+  id: string,
+  status: ProjectStatus,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('projects').update({ status }).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  // Zero rows matched is silent success to Postgres — but "status updated"
+  // for a project that doesn't exist would be a lie. select() lets us check.
+  const { data, error } = await query.select('id')
+  if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No project found with that id.')
+}
+
 export type MetricInput = {
   project_id: string
   as_of: string
@@ -155,16 +171,20 @@ export type MetricInput = {
  * Upsert rather than insert: logging twice on the same day should correct the
  * figure, not create a duplicate row that quietly breaks "latest".
  */
-export async function recordMetric(input: MetricInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function recordMetric(input: MetricInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('project_metrics')
-    .upsert({ ...input, user_id: user.id }, { onConflict: 'project_id,as_of' })
+    .upsert({ ...input, user_id: userId }, { onConflict: 'project_id,as_of' })
 
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
