@@ -76,8 +76,11 @@ export async function setGoalStatus(
   const supabase = db?.client ?? (await createClient())
   let query = supabase.from('goals').update({ status }).eq('id', id)
   if (db) query = query.eq('user_id', db.userId)
-  const { error } = await query
+  // Zero rows matched is silent success to Postgres — but "goal achieved!"
+  // for a goal that doesn't exist would be a lie. select() lets us check.
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No goal found with that id.')
 }
 
 export async function deleteGoal(id: string): Promise<void> {

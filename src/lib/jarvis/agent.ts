@@ -97,6 +97,12 @@ export async function runJarvis(userText: string): Promise<string> {
       break
     }
 
+    // Never execute tools on the final round: a write (a logged transaction)
+    // would commit and then be reported as "took too many steps", inviting a
+    // duplicate re-log. Bailing before execution keeps the failure side-
+    // effect-free, so retrying is safe.
+    if (i === MAX_ITERATIONS - 1) break
+
     messages.push({ role: 'assistant', content: response.content })
 
     // All results go back in ONE user message; a failed tool reports its

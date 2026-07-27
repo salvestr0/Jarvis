@@ -36,6 +36,11 @@ export function parseUpdate(body: unknown): IncomingMessage | null {
   if (!isRecord(chat) || !isRecord(from)) return null
   if (typeof chat.id !== 'number' || typeof from.id !== 'number') return null
 
+  // Private chats only. The route checks WHO is speaking, but the reply goes
+  // to the chat the message came from — in a group that would broadcast
+  // financial data to everyone in it, even when the speaker is the owner.
+  if (chat.type !== 'private') return null
+
   if (typeof message.text !== 'string') return null
   const text = message.text.trim()
   if (!text) return null

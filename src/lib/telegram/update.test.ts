@@ -31,6 +31,13 @@ test('trims surrounding whitespace from the text', () => {
   assert.equal(parsed?.text, 'log $12 lunch')
 })
 
+test('rejects group and channel chats — replies must stay private', () => {
+  for (const type of ['group', 'supergroup', 'channel']) {
+    const update = validUpdate({ chat: { id: -100200300, type } })
+    assert.equal(parseUpdate(update), null, `should reject chat type ${type}`)
+  }
+})
+
 test('rejects edited messages — answering them would double-log', () => {
   const update = validUpdate()
   const edited = { update_id: 2, edited_message: update.message }

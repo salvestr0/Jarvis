@@ -84,8 +84,12 @@ export async function setTaskDone(
     .update({ done, done_at: done ? new Date().toISOString() : null })
     .eq('id', id)
   if (db) query = query.eq('user_id', db.userId)
-  const { error } = await query
+  // An update matching zero rows is not an error to Postgres — but reporting
+  // "marked done" for a task that doesn't exist would be a lie. select()
+  // returns the touched rows so we can tell.
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No task found with that id.')
 }
 
 export async function deleteTask(id: string): Promise<void> {
