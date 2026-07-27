@@ -332,4 +332,346 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       required: ['goal_id', 'status'],
     },
   },
+
+  // --- updates (confirm when inferring) -------------------------------------
+  {
+    name: 'update_task',
+    description:
+      'Call this when the user wants to change a task — title, priority, due date, or note. Only pass the fields that change. Get the task_id from get_tasks first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'The task id from get_tasks' },
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high'] },
+        due_on: { ...ISO_DATE, description: 'New due date YYYY-MM-DD, or "none" to clear' },
+        note: { type: 'string' },
+      },
+      required: ['task_id'],
+    },
+  },
+  {
+    name: 'update_goal',
+    description:
+      'Call this when the user wants to change a goal — title, horizon, target date, or note. Only pass the fields that change. Get the goal_id from get_goals first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        goal_id: { type: 'string', description: 'The goal id from get_goals' },
+        title: { type: 'string' },
+        horizon: { type: 'string', enum: ['short', 'long'] },
+        target_date: { ...ISO_DATE, description: 'New target date YYYY-MM-DD, or "none" to clear' },
+        note: { type: 'string' },
+      },
+      required: ['goal_id'],
+    },
+  },
+  {
+    name: 'create_recurring',
+    description:
+      'Call this when the user wants to track a new subscription, bill, or other recurring payment ("track my $19 Netflix monthly").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'e.g. "Netflix"' },
+        direction: { type: 'string', enum: ['income', 'expense'], description: 'Default expense' },
+        amount: {
+          type: 'string',
+          description: 'Amount per billing period as the user wrote it. Do NOT convert to a number.',
+        },
+        cadence: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] },
+        next_due: { ...ISO_DATE, description: 'When the next payment is due, YYYY-MM-DD' },
+        category: { type: 'string', description: 'Optional category name, e.g. "Entertainment"' },
+      },
+      required: ['name', 'amount', 'cadence', 'next_due'],
+    },
+  },
+  {
+    name: 'update_recurring',
+    description:
+      'Call this when a recurring payment changes — new price, cadence, name, or due date ("Netflix went up to $19"). Only pass the fields that change. Get the recurring_id from get_recurring first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        recurring_id: { type: 'string', description: 'The id from get_recurring' },
+        name: { type: 'string' },
+        amount: { type: 'string', description: 'New amount as the user wrote it' },
+        cadence: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] },
+        next_due: ISO_DATE,
+      },
+      required: ['recurring_id'],
+    },
+  },
+  {
+    name: 'log_recurring_payment',
+    description:
+      'Call this when the user says a recurring bill was paid ("paid my insurance"). Records the real transaction and advances the next due date by one period. Get the recurring_id from get_recurring first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        recurring_id: { type: 'string', description: 'The id from get_recurring' },
+      },
+      required: ['recurring_id'],
+    },
+  },
+  {
+    name: 'create_holding',
+    description:
+      'Call this when the user bought or wants to track a new investment ("I bought 0.1 ETH at $250"). For insurance/investment-linked plans with no ticker use kind "manual" with a manual_value.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['crypto', 'stock', 'manual'] },
+        symbol: { type: 'string', description: 'Ticker like BTC or AAPL; short label for manual' },
+        name: { type: 'string', description: 'Optional display name' },
+        quantity: {
+          type: 'string',
+          description: 'Units held as the user wrote it, e.g. "0.1", "12". Default "1" for manual.',
+        },
+        cost_basis: {
+          type: 'string',
+          description: 'TOTAL amount paid, as written. "0" allowed (airdrop/gift).',
+        },
+        cost_currency: { type: 'string', description: 'Default USD for crypto/stock, SGD for manual' },
+        manual_value: {
+          type: 'string',
+          description: 'Manual kind only: current value in SGD, as written',
+        },
+      },
+      required: ['kind', 'symbol'],
+    },
+  },
+  {
+    name: 'update_holding',
+    description:
+      'Call this when a holding changes — more units bought (new total quantity and cost basis), or a manual plan revalued. Only pass the fields that change. Get the holding_id from get_holdings first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        holding_id: { type: 'string', description: 'The id from get_holdings' },
+        quantity: { type: 'string', description: 'New TOTAL units held, as written' },
+        cost_basis: { type: 'string', description: 'New TOTAL cost basis, as written. "0" allowed.' },
+        manual_value: { type: 'string', description: 'New current value (manual kind), as written' },
+        name: { type: 'string' },
+        note: { type: 'string' },
+      },
+      required: ['holding_id'],
+    },
+  },
+  {
+    name: 'get_accounts',
+    description:
+      'Call this when the user asks about his accounts (bank, cash, brokerage) or before creating/updating one (to find its id). Returns each with opening balance.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_account',
+    description:
+      'Call this when the user wants to track a new account ("add my DBS account with $2,000").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'e.g. "DBS Savings"' },
+        kind: { type: 'string', enum: ['cash', 'bank', 'brokerage', 'crypto_wallet', 'other'] },
+        opening_balance: {
+          type: 'string',
+          description: 'Balance when tracking starts, as written. "0" allowed.',
+        },
+      },
+      required: ['name', 'kind'],
+    },
+  },
+  {
+    name: 'update_account',
+    description:
+      'Call this when an account changes — rename or corrected opening balance. Only pass the fields that change. Get the account_id from get_accounts first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account_id: { type: 'string', description: 'The id from get_accounts' },
+        name: { type: 'string' },
+        kind: { type: 'string', enum: ['cash', 'bank', 'brokerage', 'crypto_wallet', 'other'] },
+        opening_balance: { type: 'string', description: 'Corrected opening balance, as written' },
+      },
+      required: ['account_id'],
+    },
+  },
+  {
+    name: 'create_job',
+    description:
+      'Call this when the user starts a new job or wants a past role recorded.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employer: { type: 'string' },
+        title: { type: 'string' },
+        started_on: { ...ISO_DATE, description: 'Start date YYYY-MM-DD. Default today.' },
+        salary: { type: 'string', description: 'Salary as written, e.g. "3200". Omit if unknown.' },
+        salary_period: { type: 'string', enum: ['monthly', 'annual'], description: 'Default monthly' },
+      },
+      required: ['employer', 'title'],
+    },
+  },
+  {
+    name: 'update_job',
+    description:
+      'Call this when job details change — a raise ("my salary is now $3,500"), new title, or the role ended. Only pass the fields that change. Get the job_id from get_jobs first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'The id from get_jobs' },
+        employer: { type: 'string' },
+        title: { type: 'string' },
+        salary: { type: 'string', description: 'New salary as written' },
+        salary_period: { type: 'string', enum: ['monthly', 'annual'] },
+        ended_on: { ...ISO_DATE, description: 'End date YYYY-MM-DD, or "current" if still employed' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'create_win',
+    description:
+      'Call this when the user shipped or achieved something at work worth logging ("shipped the pricing revamp today").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'The win, short' },
+        detail: { type: 'string', description: 'Optional context' },
+        date: { ...ISO_DATE, description: 'When it happened. Default today.' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'create_project',
+    description:
+      'Call this when the user starts a new side project worth tracking.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        kind: { type: 'string', enum: ['product', 'content', 'business'], description: 'Default product' },
+        status: {
+          type: 'string',
+          enum: ['idea', 'building', 'beta', 'launched', 'paused', 'archived'],
+          description: 'Default idea',
+        },
+        mrr_target: { type: 'string', description: 'Optional monthly revenue target, as written' },
+        url: { type: 'string' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'update_project',
+    description:
+      'Call this when project details change — name, kind, revenue target, URL, or launch date. For status use set_project_status; for MRR numbers use record_project_metric. Get the project_id from get_projects first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'The id from get_projects' },
+        name: { type: 'string' },
+        kind: { type: 'string', enum: ['product', 'content', 'business'] },
+        mrr_target: { type: 'string', description: 'New target as written. "0" = no target.' },
+        url: { type: 'string' },
+        launch_date: ISO_DATE,
+      },
+      required: ['project_id'],
+    },
+  },
+
+  // --- deletes (ALWAYS get explicit confirmation first) ----------------------
+  {
+    name: 'delete_transaction',
+    description:
+      'Call this when Jayden has explicitly confirmed in this conversation which transaction to delete. Destructive, no undo. Get the transaction_id from get_month_transactions first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        transaction_id: { type: 'string', description: 'The id from get_month_transactions' },
+      },
+      required: ['transaction_id'],
+    },
+  },
+  {
+    name: 'delete_task',
+    description:
+      'Call this when Jayden has explicitly confirmed deleting this task (to complete one, use set_task_done instead). Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { task_id: { type: 'string' } },
+      required: ['task_id'],
+    },
+  },
+  {
+    name: 'delete_goal',
+    description:
+      'Call this when Jayden has explicitly confirmed deleting this goal (for an abandoned goal prefer set_goal_status "dropped", which keeps history). Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { goal_id: { type: 'string' } },
+      required: ['goal_id'],
+    },
+  },
+  {
+    name: 'delete_recurring',
+    description:
+      'Call this when Jayden has explicitly confirmed cancelling this recurring payment ("I cancelled Netflix"). Destructive, no undo — past logged transactions stay.',
+    input_schema: {
+      type: 'object',
+      properties: { recurring_id: { type: 'string' } },
+      required: ['recurring_id'],
+    },
+  },
+  {
+    name: 'delete_holding',
+    description:
+      'Call this when Jayden has explicitly confirmed he sold or wants to stop tracking this holding. Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { holding_id: { type: 'string' } },
+      required: ['holding_id'],
+    },
+  },
+  {
+    name: 'delete_job',
+    description:
+      'Call this when Jayden has explicitly confirmed deleting this job record (if the role just ended, use update_job with ended_on instead). Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { job_id: { type: 'string' } },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'delete_win',
+    description:
+      'Call this when Jayden has explicitly confirmed deleting this career win. Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { win_id: { type: 'string' } },
+      required: ['win_id'],
+    },
+  },
+  {
+    name: 'delete_project',
+    description:
+      'Call this when Jayden has explicitly confirmed deleting this project and its metrics (prefer set_project_status "archived", which keeps history). Destructive, no undo.',
+    input_schema: {
+      type: 'object',
+      properties: { project_id: { type: 'string' } },
+      required: ['project_id'],
+    },
+  },
+  {
+    name: 'archive_account',
+    description:
+      'Call this when Jayden has explicitly confirmed closing this account. Soft delete: it disappears from lists but its transaction history stays.',
+    input_schema: {
+      type: 'object',
+      properties: { account_id: { type: 'string' } },
+      required: ['account_id'],
+    },
+  },
 ]

@@ -144,16 +144,23 @@ export type HoldingInput = {
   manual_value_cents: number | null
 }
 
-export async function createHolding(input: HoldingInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createHolding(
+  input: HoldingInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('holdings')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) {
     if (error.code === '23505') {
@@ -167,17 +174,24 @@ export async function createHolding(input: HoldingInput): Promise<void> {
 
 export async function updateHolding(
   id: string,
-  input: HoldingInput
+  input: HoldingInput,
+  db?: Db
 ): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('holdings').update(input).eq('id', id)
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('holdings').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No holding found with that id.')
 }
 
-export async function deleteHolding(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('holdings').delete().eq('id', id)
+export async function deleteHolding(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('holdings').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No holding found with that id.')
 }
 
 // --- refresh ---------------------------------------------------------------

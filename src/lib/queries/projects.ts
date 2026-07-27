@@ -108,16 +108,23 @@ export type ProjectInput = {
   note: string | null
 }
 
-export async function createProject(input: ProjectInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createProject(
+  input: ProjectInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('projects')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) {
     if (error.code === '23505') {
@@ -129,17 +136,26 @@ export async function createProject(input: ProjectInput): Promise<void> {
 
 export async function updateProject(
   id: string,
-  input: ProjectInput
+  input: ProjectInput,
+  db?: Db
 ): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('projects').update(input).eq('id', id)
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('projects').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No project found with that id.')
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('projects').delete().eq('id', id)
+export async function deleteProject(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('projects').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No project found with that id.')
 }
 
 export async function setProjectStatus(

@@ -13,6 +13,7 @@ export type Account = {
   kind: AccountKind
   currency: string
   archived: boolean
+  opening_balance_cents: number
 }
 
 export type Category = {

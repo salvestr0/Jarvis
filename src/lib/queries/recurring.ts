@@ -69,37 +69,52 @@ export type RecurringInput = {
   category_id: string | null
 }
 
-export async function createRecurring(input: RecurringInput): Promise<void> {
-  const supabase = await createClient()
+export async function createRecurring(
+  input: RecurringInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) throw new Error('Not signed in.')
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('recurring')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
 
 export async function updateRecurring(
   id: string,
-  input: RecurringInput
+  input: RecurringInput,
+  db?: Db
 ): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('recurring').update(input).eq('id', id)
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('recurring').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
 
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No recurring payment found with that id.')
 }
 
-export async function deleteRecurring(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('recurring').delete().eq('id', id)
+export async function deleteRecurring(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('recurring').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
 
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No recurring payment found with that id.')
 }
 
 /**
@@ -114,20 +129,24 @@ export async function deleteRecurring(id: string): Promise<void> {
  * advance fails, the error surfaces and next_due is still on the old date, so
  * the worst case is seeing the item as due again — visible, not silent.
  */
-export async function logRecurringPayment(id: string): Promise<void> {
-  const supabase = await createClient()
+export async function logRecurringPayment(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
-  if (!user) throw new Error('Not signed in.')
-
-  const { data: item, error: loadError } = await supabase
+  let loadQuery = supabase
     .from('recurring')
     .select('name, direction, amount_cents, currency, cadence, next_due, category_id')
     .eq('id', id)
-    .single()
+  if (db) loadQuery = loadQuery.eq('user_id', db.userId)
+  const { data: item, error: loadError } = await loadQuery.single()
 
   if (loadError || !item)
     throw new Error(`Could not load that recurring payment.`)
@@ -137,7 +156,7 @@ export async function logRecurringPayment(id: string): Promise<void> {
   const occurredOn = due <= today ? due : today
 
   const { error: insertError } = await supabase.from('transactions').insert({
-    user_id: user.id,
+    user_id: userId,
     occurred_on: occurredOn,
     direction: item.direction,
     amount_cents: item.amount_cents,
@@ -149,10 +168,12 @@ export async function logRecurringPayment(id: string): Promise<void> {
 
   if (insertError) throw new Error(`Could not log payment: ${insertError.message}`)
 
-  const { error: advanceError } = await supabase
+  let advanceQuery = supabase
     .from('recurring')
     .update({ next_due: advanceByCadence(due, item.cadence as Cadence) })
     .eq('id', id)
+  if (db) advanceQuery = advanceQuery.eq('user_id', db.userId)
+  const { error: advanceError } = await advanceQuery
 
   if (advanceError)
     throw new Error(

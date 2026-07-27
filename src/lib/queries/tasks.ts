@@ -67,10 +67,17 @@ export async function createTask(input: TaskInput, db?: Db): Promise<void> {
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
 
-export async function updateTask(id: string, input: TaskInput): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('tasks').update(input).eq('id', id)
+export async function updateTask(
+  id: string,
+  input: TaskInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('tasks').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No task found with that id.')
 }
 
 export async function setTaskDone(
@@ -92,8 +99,11 @@ export async function setTaskDone(
   if (!data || data.length === 0) throw new Error('No task found with that id.')
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('tasks').delete().eq('id', id)
+export async function deleteTask(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('tasks').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No task found with that id.')
 }

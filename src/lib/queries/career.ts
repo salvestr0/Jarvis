@@ -76,27 +76,43 @@ export type JobInput = {
   note: string | null
 }
 
-export async function createJob(input: JobInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createJob(input: JobInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
-  const { error } = await supabase.from('jobs').insert({ ...input, user_id: user.id })
+  const { error } = await supabase
+    .from('jobs')
+    .insert({ ...input, user_id: userId })
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
 
-export async function updateJob(id: string, input: JobInput): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('jobs').update(input).eq('id', id)
+export async function updateJob(
+  id: string,
+  input: JobInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('jobs').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No job found with that id.')
 }
 
-export async function deleteJob(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('jobs').delete().eq('id', id)
+export async function deleteJob(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('jobs').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No job found with that id.')
 }
 
 export type WinInput = {
@@ -106,21 +122,28 @@ export type WinInput = {
   detail: string | null
 }
 
-export async function createWin(input: WinInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createWin(input: WinInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('job_wins')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
 
-export async function deleteWin(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('job_wins').delete().eq('id', id)
+export async function deleteWin(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('job_wins').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No win found with that id.')
 }

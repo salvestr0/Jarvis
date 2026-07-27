@@ -62,10 +62,17 @@ export async function createGoal(input: GoalInput, db?: Db): Promise<void> {
   }
 }
 
-export async function updateGoal(id: string, input: GoalInput): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('goals').update(input).eq('id', id)
+export async function updateGoal(
+  id: string,
+  input: GoalInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('goals').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No goal found with that id.')
 }
 
 export async function setGoalStatus(
@@ -83,8 +90,11 @@ export async function setGoalStatus(
   if (!data || data.length === 0) throw new Error('No goal found with that id.')
 }
 
-export async function deleteGoal(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('goals').delete().eq('id', id)
+export async function deleteGoal(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('goals').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No goal found with that id.')
 }

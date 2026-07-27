@@ -32,16 +32,68 @@ import type {
 
 // --- reads -----------------------------------------------------------------
 
-export async function getAccounts(): Promise<Account[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getAccounts(db?: Db): Promise<Account[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('accounts')
-    .select('id, name, kind, currency, archived')
+    .select('id, name, kind, currency, archived, opening_balance_cents')
     .eq('archived', false)
-    .order('name')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.order('name')
 
   if (error) throw new Error(`Could not load accounts: ${error.message}`)
-  return data ?? []
+  return (data ?? []) as Account[]
+}
+
+export type AccountInput = {
+  name: string
+  kind: Account['kind']
+  currency: string
+  opening_balance_cents: number
+}
+
+export async function createAccount(input: AccountInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
+
+  const { error } = await supabase
+    .from('accounts')
+    .insert({ ...input, user_id: userId })
+  if (error) throw new Error(`Could not save: ${error.message}`)
+}
+
+export async function updateAccount(
+  id: string,
+  input: AccountInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('accounts').update(input).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
+  if (error) throw new Error(`Could not update: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No account found with that id.')
+}
+
+/**
+ * Soft delete: the account disappears from lists but its transactions keep
+ * their history. There is deliberately no hard delete for accounts.
+ */
+export async function archiveAccount(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('accounts').update({ archived: true }).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.select('id')
+  if (error) throw new Error(`Could not archive: ${error.message}`)
+  if (!data || data.length === 0) throw new Error('No account found with that id.')
 }
 
 export async function getCategories(): Promise<Category[]> {
@@ -252,9 +304,13 @@ export async function updateTransaction(
   if (error) throw new Error(`Could not update: ${error.message}`)
 }
 
-export async function deleteTransaction(id: string): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('transactions').delete().eq('id', id)
-
+export async function deleteTransaction(id: string, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('transactions').delete().eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  // Zero rows matched is silent success to Postgres; "deleted" must be true.
+  const { data, error } = await query.select('id')
   if (error) throw new Error(`Could not delete: ${error.message}`)
+  if (!data || data.length === 0)
+    throw new Error('No transaction found with that id.')
 }
