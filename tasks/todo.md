@@ -160,3 +160,23 @@ Claude Opus 5 manual tool loop (15 tools over `src/lib/queries/*`) →
 - **Reply 200 to Telegram for junk** (bad body, wrong user, edits) — any 4xx
   makes Telegram redeliver the same update forever. Only a bad secret gets 401.
 - **`effort: 'low'`** on Opus 5 for latency; thinking stays adaptive.
+
+### Phase 3 + full assistant — 27 Jul 2026 (same day, continued)
+
+- [x] Read-only Google: calendar.readonly + gmail.readonly via raw REST,
+      loopback token mint (`npm run google:auth`), 3 bot tools
+- [x] Morning digest: /api/cron/digest (10:00 SGT), tested signal rules in
+      pure signals.ts, Claude-composed with deterministic fallback,
+      settings-controlled at /settings (mode + 5 section toggles, 0007)
+- [x] Long-term memory: facts table (0008), remember/forget tools, facts in
+      every turn's system prompt and in the digest
+- [x] Sonnet 5 switch (cost), sin1 region pin (page loads 300ms → ~80ms)
+- [x] Full read & write: 46 tools, tiered guardrails (adds instant / edits
+      confirm-if-inferred / deletes always confirm, one id per yes, no bulk
+      delete surface), zero-rows honesty checks on every update/delete
+- [x] Code review + security audit: full-history leak scan clean, top 3
+      findings fixed same day
+
+**The day in one line:** idea → deployed tracker → Telegram voice →
+Google-connected, memory-bearing, self-starting assistant. All three phases
+of the original plan shipped in one session.
