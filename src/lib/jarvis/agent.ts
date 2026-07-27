@@ -7,6 +7,7 @@ import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
 import { TOOL_SCHEMAS } from '@/lib/jarvis/tool-schemas'
+import { getFacts, type Fact } from '@/lib/queries/facts'
 
 /**
  * The Jarvis agent: one Telegram message in, one reply out.
@@ -33,7 +34,16 @@ function getClient(): Anthropic {
   return cachedClient
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(facts: Fact[]): string {
+  const factsBlock =
+    facts.length === 0
+      ? 'You have no stored facts about Jayden yet.'
+      : [
+          'What you know about Jayden — standing facts he told you, oldest',
+          'first. Apply them without being asked. The ids are for the forget tool.',
+          ...facts.map((f) => `- [${f.id}] ${f.content}`),
+        ].join('\n')
+
   return [
     "You are Jarvis, Jayden's personal assistant, speaking with him on Telegram.",
     `Today is ${todayISO()} (Asia/Singapore). Base currency is SGD.`,
@@ -41,6 +51,13 @@ function buildSystemPrompt(): string {
     'You have tools over his real finance/life tracker, plus read-only access',
     'to his Google Calendar and Gmail. Use them rather than guessing; if a',
     'request is ambiguous (e.g. no amount), ask instead of assuming.',
+    '',
+    'When Jayden tells you something durable about himself — a preference, a',
+    'person, a date, a budget — keep it with the remember tool. When a fact',
+    'changes, forget the old one and remember the new. Never re-remember',
+    'something already in your facts.',
+    '',
+    factsBlock,
     '',
     'Money fields in tool results carry integer cents plus a preformatted',
     '`display` string — always quote the display strings and never do your own',
@@ -63,7 +80,7 @@ function textOf(response: Anthropic.Message): string {
 
 export async function runJarvis(userText: string): Promise<string> {
   const db = await getBotDb()
-  const history = await loadHistory(db)
+  const [history, facts] = await Promise.all([loadHistory(db), getFacts(db)])
 
   const messages: Anthropic.MessageParam[] = [
     ...history.map((t): Anthropic.MessageParam => ({ role: t.role, content: t.content })),
@@ -78,7 +95,7 @@ export async function runJarvis(userText: string): Promise<string> {
       max_tokens: MAX_TOKENS,
       // Snappy replies; adaptive thinking stays on by default on Opus 5.
       output_config: { effort: 'low' },
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(facts),
       tools: TOOL_SCHEMAS as Anthropic.Tool[],
       messages,
     })

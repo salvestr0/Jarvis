@@ -160,6 +160,39 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
 
+  // --- memory --------------------------------------------------------------
+  {
+    name: 'remember',
+    description:
+      'Call this when the user tells you something durable about himself worth keeping — a preference, a person, a date, a budget, a routine ("my mom\'s birthday is March 3", "keep food under $600/month"). Store ONE self-contained fact per call, worded to make sense months later. Do not store things the tracker already records (transactions, tasks, goals).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact: {
+          type: 'string',
+          description:
+            'The fact, one sentence, self-contained (max 500 chars). Include names and absolute dates, not "next week".',
+        },
+      },
+      required: ['fact'],
+    },
+  },
+  {
+    name: 'forget',
+    description:
+      'Call this when a remembered fact is wrong, outdated, or the user asks you to forget it. The fact ids are listed in your context. When a fact changed, forget the old one AND remember the corrected one.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact_id: {
+          type: 'string',
+          description: 'The id of the fact to delete, from the facts list in your context',
+        },
+      },
+      required: ['fact_id'],
+    },
+  },
+
   // --- writes --------------------------------------------------------------
   {
     name: 'log_transaction',

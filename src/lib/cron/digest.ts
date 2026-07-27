@@ -9,6 +9,7 @@ import { getBotDb } from '@/lib/jarvis/db'
 import { saveAssistantNote } from '@/lib/jarvis/history'
 import { computeSignals, type Signal } from '@/lib/jarvis/signals'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
+import { getFacts } from '@/lib/queries/facts'
 import { getGoals } from '@/lib/queries/goals'
 import { getSettings } from '@/lib/queries/settings'
 import { getTransactionsForMonth, summariseMonth } from '@/lib/queries/money'
@@ -54,6 +55,8 @@ type DigestContent = {
   signals: Signal[]
   events: CalendarEvent[] | null
   emails: EmailSummary[] | null
+  /** Jarvis's long-term memory — lets the digest notice birthdays, budgets… */
+  facts: string[]
 }
 
 /** Plain deterministic rendering — the digest that needs no model at all. */
@@ -98,8 +101,10 @@ async function composeDigest(
         "You are Jarvis, writing Jayden's short morning briefing for Telegram.",
         'Plain text only, a few short lines, no markdown. Lead with anything',
         'urgent (the "notable" signals), then the day at a glance. Quote the',
-        'money strings exactly as given — never do your own arithmetic. If',
-        'there is nothing at all, say so in one warm line.',
+        'money strings exactly as given — never do your own arithmetic. The',
+        'facts list is your long-term memory about Jayden — mention a fact',
+        "only when today makes it relevant (a birthday, a budget he's near).",
+        'If there is nothing at all, say so in one warm line.',
       ].join('\n'),
       messages: [{ role: 'user', content: JSON.stringify(content) }],
     })
@@ -184,9 +189,11 @@ export async function runDailyDigest(): Promise<DigestReport> {
     : null
 
   // Data for the signal rules — only for sections that are switched on.
+  // Facts always load: memory applies regardless of section toggles.
   const month = currentMonth()
-  const [recurring, tasks, netWorth, goals, thisMonth, prior1, prior2] =
+  const [facts, recurring, tasks, netWorth, goals, thisMonth, prior1, prior2] =
     await Promise.all([
+      getFacts(db),
       settings.digest_money ? getRecurring(db) : [],
       settings.digest_tasks ? getTasks(db) : [],
       settings.digest_portfolio ? getNetWorthHistory(365, db) : [],
@@ -240,6 +247,7 @@ export async function runDailyDigest(): Promise<DigestReport> {
     signals,
     events,
     emails,
+    facts: facts.map((f) => f.content),
   })
   report.composedBy = composedBy
 

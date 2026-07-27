@@ -6,6 +6,7 @@ import { getMessage, searchMessages } from '@/lib/google/gmail'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
+import { createFact, deleteFact } from '@/lib/queries/facts'
 import { getJobs, getWins, monthlySalaryCents } from '@/lib/queries/career'
 import {
   createGoal,
@@ -345,6 +346,20 @@ export async function executeTool(
         body: truncated ? `${message.body.slice(0, 2000)}…` : message.body,
         truncated,
       })
+    }
+
+    // --- memory ------------------------------------------------------------
+
+    case 'remember': {
+      const fact = requiredString(input, 'fact')
+      if (fact.length > 500) throw new Error('fact is too long (500 max).')
+      await createFact(fact, db)
+      return JSON.stringify({ remembered: fact })
+    }
+
+    case 'forget': {
+      await deleteFact(requiredString(input, 'fact_id'), db)
+      return JSON.stringify({ forgotten: true })
     }
 
     // --- writes ------------------------------------------------------------
