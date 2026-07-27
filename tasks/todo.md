@@ -128,3 +128,35 @@ to debug.
   the identical message, so the page can't be used to figure out which email
   is the real account.
 - **`npm audit` was left unfixed on purpose.** See lessons.md.
+
+### Phase 2 — Telegram bot (Claude Opus 5), 27 Jul 2026
+
+**What was built:** the voice. `POST /api/telegram` webhook → `after()` →
+Claude Opus 5 manual tool loop (15 tools over `src/lib/queries/*`) →
+`sendMessage`. Conversation memory in `chat_messages` (migration 0006).
+
+- [x] Pure modules + tests: telegram/update, telegram/format, jarvis/tool-schemas
+- [x] `@anthropic-ai/sdk` + optional `db?: Db` param on 18 query functions
+      (admin client ⇒ explicit `user_id` scoping; web path byte-identical)
+- [x] Migration 0006_chat.sql applied, db:check green
+- [x] Server modules: telegram/api, jarvis/{db,history,execute,agent}
+- [x] Webhook route (fail-closed 503/401/silent-drop) + PUBLIC_PATHS + admin comment
+- [x] Audit script covers 3 new secrets + TOKEN prefix ban; env example; docs;
+      `npm run telegram:setup` script
+- [x] verify (54 tests) / audit / db:check all green; local curl e2e of all
+      auth paths passed; `after()` pipeline confirmed reaching Anthropic client
+- [ ] BLOCKED ON JAYDEN: @BotFather token, @userinfobot id, Anthropic API key
+      → fill .env.local, `vercel env add` ×4, deploy, `npm run telegram:setup`
+
+**Decisions worth remembering:**
+
+- **Manual tool loop, not the SDK's beta toolRunner** — ~30 lines, no beta
+  dependency, every step visible in Vercel function logs.
+- **Amounts cross the tool boundary as strings**, parsed by `parseMoney` —
+  the model never does float arithmetic; results carry cents + `display`.
+- **`db?: Db` trailing param** keeps the web app path byte-identical while
+  giving the bot an admin client scoped by `user_id` in code (the
+  refresh-all.ts precedent, now documented in `src/lib/queries/db.ts`).
+- **Reply 200 to Telegram for junk** (bad body, wrong user, edits) — any 4xx
+  makes Telegram redeliver the same update forever. Only a bad secret gets 401.
+- **`effort: 'low'`** on Opus 5 for latency; thinking stays adaptive.

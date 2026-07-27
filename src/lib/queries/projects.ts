@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import type { Db } from '@/lib/queries/db'
 
 export type ProjectStatus =
   | 'idea'
@@ -39,23 +40,26 @@ export type ProjectWithProgress = Project & {
   progressPct: number | null
 }
 
-export async function getProjects(): Promise<Project[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getProjects(db?: Db): Promise<Project[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('projects')
     .select('id, name, status, kind, launch_date, mrr_target_cents, url, note')
-    .order('name')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.order('name')
 
   if (error) throw new Error(`Could not load projects: ${error.message}`)
   return (data ?? []) as Project[]
 }
 
-export async function getMetrics(): Promise<ProjectMetric[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getMetrics(db?: Db): Promise<ProjectMetric[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('project_metrics')
     .select('id, project_id, as_of, mrr_cents, users_count')
-    .order('as_of', { ascending: false })
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.order('as_of', { ascending: false })
 
   if (error) throw new Error(`Could not load metrics: ${error.message}`)
   return (data ?? []) as ProjectMetric[]

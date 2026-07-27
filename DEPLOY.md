@@ -137,6 +137,38 @@ runs **once per day**, which is exactly what this needs.
 
 ---
 
+## 7. The Telegram bot (Phase 2)
+
+Four more environment variables (all environments, same as step 4 — and the
+same rule applies: **server-only, never `NEXT_PUBLIC_`**):
+
+| Name | Where it comes from |
+|---|---|
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API keys |
+| `TELEGRAM_BOT_TOKEN` | Message @BotFather on Telegram → /newbot |
+| `TELEGRAM_WEBHOOK_SECRET` | Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `TELEGRAM_USER_ID` | Message @userinfobot on Telegram — your numeric id |
+
+Then:
+
+1. `npm run db:migrate` from your machine (migration `0006_chat.sql` — the
+   bot's conversation memory).
+2. Add the four variables to Vercel and deploy.
+3. `npm run telegram:setup` — registers the webhook at
+   `<your-app>/api/telegram` with the secret. It prints `getWebhookInfo` so
+   you can see it stuck.
+4. Message your bot: *"what's my net worth?"*, *"log $12 lunch"*.
+
+The route answers Telegram instantly and finishes the Claude call afterwards
+(`after()` + Vercel Fluid Compute) — if replies ever stop mid-sentence, check
+that Fluid Compute is enabled in the project settings before suspecting code.
+
+If the bot doesn't reply: **Deployments → Functions** logs, lines starting
+`[telegram]`. `getWebhookInfo` (rerun the setup script) shows Telegram's side
+of the story, including its last delivery error.
+
+---
+
 ## After every change
 
 ```bash

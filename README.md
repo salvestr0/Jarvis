@@ -23,7 +23,7 @@ An assistant is only as useful as what it knows about you. So the order matters:
 3. **Let it act.** Logging, reminders, and follow-ups initiated by Jarvis rather
    than by you.
 
-Step 1 is what's in this repository today.
+Steps 1 and 2 are what's in this repository today.
 
 ---
 
@@ -57,23 +57,42 @@ not a rewrite.
 
 ---
 
-## Where it's going
+## The voice — Telegram + Claude
 
-**Telegram as the interface.** A dashboard makes you go and look. A chat thread
-comes to you — and you already have it open. The goal is to send *"just got paid
-3200"* or *"what's my runway?"* and have it land in the same database this app
-writes to.
+Phase 2 is live: a Telegram bot backed by **Claude Opus 5** with tool access to
+the same query layer the web app uses. Send *"log $12 lunch"* or *"what's my
+net worth?"* and it reads or writes the same database.
 
-**A frontier model to understand it.** Turning a sentence into the right action
-needs a real language model. Current options are the Claude API
-(`claude-opus-5` for reasoning, `claude-haiku-4-5` for cheap high-frequency
-calls) — the same family of tool-calling APIs that makes `get_net_worth` a
-function the model can decide to call on its own.
+How a message flows:
+
+```
+Telegram → POST /api/telegram          secret-token + user-id check, ack 200
+         → after()                     work continues past the response
+         → Claude Opus 5 tool loop     15 tools over src/lib/queries/*
+         → sendMessage                 plain-text reply, chunked at 4096
+```
+
+The tools: `get_net_worth`, `get_net_worth_history`, `get_month_summary`,
+`get_month_transactions`, `get_recurring`, `get_holdings`, `get_goals`,
+`get_tasks`, `get_jobs`, `get_projects`, `log_transaction`, `create_task`,
+`set_task_done`, `create_goal`, `set_goal_status`. Each one is a thin schema
+over an existing function in `src/lib/queries/` — the payoff of never letting
+data access live inside a page.
+
+Security is the same fail-closed posture as the rest of the app: the route
+returns 503 until its secrets are configured, rejects any request without the
+webhook secret Telegram was registered with, and silently drops messages from
+any Telegram account other than yours. The bot runs on the service-role client,
+so every query it makes is scoped by `user_id` in code (`src/lib/queries/db.ts`
+documents the contract). Conversation memory lives in the `chat_messages`
+table — final text only, last ~20 turns replayed for context.
+
+Set it up with `npm run telegram:setup` after deploying (see DEPLOY.md).
 
 **Then: proactive.** Once Jarvis can read the data and reach you, the interesting
 version isn't answering questions — it's noticing. Spending up 40% this month.
-A position down 30%. A subscription you forgot. That only works on top of a
-database that's actually correct, which is why the foundation came first.
+A position down 30%. A subscription you forgot. That's Phase 3, and the daily
+cron already gives it a heartbeat to run on.
 
 ---
 
@@ -134,7 +153,8 @@ npm run dev
 | `npm run audit` | Secret scan, browser-bundle scan, service-role placement |
 | `npm run db:migrate` | Apply new SQL in `supabase/migrations/` |
 | `npm run db:check` | Confirm every table has RLS and a valid policy |
-| `npm test` | Unit tests (money parsing, portfolio maths, dates) |
+| `npm run telegram:setup` | Register the Telegram webhook (after deploy) |
+| `npm test` | Unit tests (money parsing, portfolio maths, dates, bot parsing) |
 
 `npm run audit` exits non-zero on a real problem, so it can gate a deploy. Run
 it before pushing anything public.

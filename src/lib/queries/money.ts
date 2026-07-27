@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import { monthEndExclusive, monthStart } from '@/lib/date'
+import type { Db } from '@/lib/queries/db'
 import type {
   Account,
   Category,
@@ -16,15 +17,17 @@ import type {
  *
  * Two reasons:
  *  1. One place to audit when checking what touches your financial data.
- *  2. When Koda later gets tools like `log_income` or `get_month_summary`,
- *     they call these exact functions. No logic gets duplicated or drifts.
+ *  2. The Telegram bot's tools (`log_transaction`, `get_month_summary`) call
+ *     these exact functions. No logic gets duplicated or drifts.
  *
  * `import 'server-only'` makes the build fail if any of this is ever
  * imported into browser code by accident.
  *
- * Note none of these functions take a userId. Row Level Security scopes every
- * query to the logged-in user inside Postgres itself. Filtering by user in
- * application code as well would be a second place to get it wrong.
+ * On user scoping: called without a `db` argument (the web app), functions
+ * take no userId — Row Level Security scopes every query to the logged-in
+ * user inside Postgres itself. Called with a `db` (the bot's admin client,
+ * which bypasses RLS), the ownership rules move into application code — see
+ * the contract in @/lib/queries/db.
  */
 
 // --- reads -----------------------------------------------------------------
@@ -67,17 +70,23 @@ type RawTransaction = {
 }
 
 export async function getTransactionsForMonth(
-  month: string
+  month: string,
+  db?: Db
 ): Promise<TransactionRow[]> {
-  const supabase = await createClient()
+  const supabase = db?.client ?? (await createClient())
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('transactions')
     .select(
       'id, occurred_on, direction, amount_cents, currency, category_id, account_id, note, categories(name), accounts(name)'
     )
     .gte('occurred_on', monthStart(month))
     .lt('occurred_on', monthEndExclusive(month))
+
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+
+  const { data, error } = await query
     .order('occurred_on', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -162,22 +171,28 @@ export function totalsByCategory(
  */
 export async function findOrCreateCategory(
   name: string,
-  direction: Direction
+  direction: Direction,
+  db?: Db
 ): Promise<string> {
-  const supabase = await createClient()
+  const supabase = db?.client ?? (await createClient())
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
-  if (!user) throw new Error('Not signed in.')
-
-  const { data: existing, error: lookupError } = await supabase
+  let lookup = supabase
     .from('categories')
     .select('id')
     .eq('name', name)
     .eq('direction', direction)
-    .maybeSingle()
+  if (db) lookup = lookup.eq('user_id', db.userId)
+
+  const { data: existing, error: lookupError } = await lookup.maybeSingle()
 
   if (lookupError)
     throw new Error(`Could not look up category: ${lookupError.message}`)
@@ -185,7 +200,7 @@ export async function findOrCreateCategory(
 
   const { data, error } = await supabase
     .from('categories')
-    .insert({ user_id: user.id, name, direction })
+    .insert({ user_id: userId, name, direction })
     .select('id')
     .single()
 
@@ -203,20 +218,26 @@ export type TransactionInput = {
   note: string | null
 }
 
-export async function createTransaction(input: TransactionInput): Promise<void> {
-  const supabase = await createClient()
+export async function createTransaction(
+  input: TransactionInput,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) throw new Error('Not signed in.')
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   // user_id must be set explicitly: the RLS `with check` rule rejects any row
   // whose user_id isn't the logged-in user, so this is both required and safe.
   const { error } = await supabase
     .from('transactions')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) throw new Error(`Could not save: ${error.message}`)
 }

@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import { todayISO } from '@/lib/date'
+import type { Db } from '@/lib/queries/db'
 import {
   fetchCryptoPrices,
   fetchStockPrices,
@@ -30,15 +31,16 @@ export {
 
 // --- reads -----------------------------------------------------------------
 
-export async function getHoldings(): Promise<Holding[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getHoldings(db?: Db): Promise<Holding[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('holdings')
     .select(
       'id, kind, symbol, name, quantity, cost_basis_cents, cost_currency, price_currency, account_id, note, manual_value_cents'
     )
-    .order('kind')
-    .order('symbol')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.order('kind').order('symbol')
 
   if (error) throw new Error(`Could not load holdings: ${error.message}`)
 
@@ -51,8 +53,9 @@ export async function getHoldings(): Promise<Holding[]> {
 }
 
 /** Most recent price for each symbol we hold. */
-export async function getLatestPrices(): Promise<Map<string, PriceEntry>> {
-  const supabase = await createClient()
+export async function getLatestPrices(db?: Db): Promise<Map<string, PriceEntry>> {
+  // Prices are global rows, not per-user — the client swaps but no user filter.
+  const supabase = db?.client ?? (await createClient())
   const { data, error } = await supabase
     .from('price_snapshots')
     .select('kind, symbol, price_micros, currency, as_of')
@@ -77,10 +80,11 @@ export async function getLatestPrices(): Promise<Map<string, PriceEntry>> {
 }
 
 /** Most recent USD->SGD rate, or null if none has been fetched yet. */
-export async function getLatestUsdSgd(): Promise<
+export async function getLatestUsdSgd(db?: Db): Promise<
   { rate: number; asOf: string } | null
 > {
-  const supabase = await createClient()
+  // FX rates are global rows, not per-user — no user filter needed.
+  const supabase = db?.client ?? (await createClient())
   const { data, error } = await supabase
     .from('fx_rates')
     .select('rate_micros, as_of')
@@ -99,13 +103,18 @@ export async function getLatestUsdSgd(): Promise<
  * Cash on hand: every account's opening balance, plus all income, minus all
  * expenses. Not limited to one month — this is a running balance.
  */
-export async function getCashBalanceCents(): Promise<number> {
-  const supabase = await createClient()
+export async function getCashBalanceCents(db?: Db): Promise<number> {
+  const supabase = db?.client ?? (await createClient())
 
-  const [accountsRes, txRes] = await Promise.all([
-    supabase.from('accounts').select('opening_balance_cents'),
-    supabase.from('transactions').select('direction, amount_cents'),
-  ])
+  let accountsQuery = supabase.from('accounts').select('opening_balance_cents')
+  let txQuery = supabase.from('transactions').select('direction, amount_cents')
+  // Admin client bypasses RLS, so ownership moves into the queries themselves.
+  if (db) {
+    accountsQuery = accountsQuery.eq('user_id', db.userId)
+    txQuery = txQuery.eq('user_id', db.userId)
+  }
+
+  const [accountsRes, txRes] = await Promise.all([accountsQuery, txQuery])
 
   if (accountsRes.error)
     throw new Error(`Could not load accounts: ${accountsRes.error.message}`)

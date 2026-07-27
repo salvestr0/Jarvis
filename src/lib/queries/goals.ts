@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import type { Db } from '@/lib/queries/db'
 
 export type GoalHorizon = 'short' | 'long'
 
@@ -15,11 +16,14 @@ export type Goal = {
   note: string | null
 }
 
-export async function getGoals(): Promise<Goal[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getGoals(db?: Db): Promise<Goal[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('goals')
     .select('id, title, horizon, status, target_date, note')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query
     .order('target_date', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
 
@@ -35,16 +39,20 @@ export type GoalInput = {
   note: string | null
 }
 
-export async function createGoal(input: GoalInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createGoal(input: GoalInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('goals')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) {
     if (error.code === '23505') {
@@ -62,10 +70,13 @@ export async function updateGoal(id: string, input: GoalInput): Promise<void> {
 
 export async function setGoalStatus(
   id: string,
-  status: GoalStatus
+  status: GoalStatus,
+  db?: Db
 ): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('goals').update({ status }).eq('id', id)
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase.from('goals').update({ status }).eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { error } = await query
   if (error) throw new Error(`Could not update: ${error.message}`)
 }
 

@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import { advanceByCadence, todayISO } from '@/lib/date'
+import type { Db } from '@/lib/queries/db'
 import type { Cadence, Direction, RecurringRow } from '@/lib/types'
 
 /**
@@ -25,15 +26,19 @@ type RawRecurring = {
   categories: { name: string } | null
 }
 
-export async function getRecurring(): Promise<RecurringRow[]> {
-  const supabase = await createClient()
+export async function getRecurring(db?: Db): Promise<RecurringRow[]> {
+  const supabase = db?.client ?? (await createClient())
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('recurring')
     .select(
       'id, name, direction, amount_cents, currency, cadence, next_due, category_id, active, categories(name)'
     )
     .eq('active', true)
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+
+  const { data, error } = await query
     .order('next_due', { ascending: true })
     .order('name')
 

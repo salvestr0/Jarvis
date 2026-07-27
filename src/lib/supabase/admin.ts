@@ -11,7 +11,11 @@ import { getSupabaseUrl } from './env'
  * Security entirely. It can read and write every row belonging to every user.
  *
  * Rules:
- *   - Only the scheduled price job uses this (src/app/api/cron/prices).
+ *   - Only two things use this, both sessionless by nature:
+ *       1. the scheduled price job (src/app/api/cron/prices)
+ *       2. the Telegram bot (src/app/api/telegram -> src/lib/jarvis), which
+ *          scopes every query by user_id in code via the Db contract in
+ *          src/lib/queries/db.ts
  *   - Never import this from a Client Component or anything under a
  *     'use client' boundary. The `server-only` import above turns that into a
  *     build error rather than a silent leak.
@@ -20,8 +24,8 @@ import { getSupabaseUrl } from './env'
  *     viewing the page owns the database.
  *
  * Everything a signed-in user does goes through the normal client in
- * ./server.ts, where RLS applies. This exists only because a cron job has no
- * user session to authenticate as.
+ * ./server.ts, where RLS applies. This exists only because a cron job and a
+ * chat bot have no user session to authenticate as.
  *
  * ================================================================
  */
@@ -30,7 +34,7 @@ export function createAdminClient() {
 
   if (!key) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY is not set. The scheduled price job cannot run without it.'
+      'SUPABASE_SERVICE_ROLE_KEY is not set. The price cron and the Telegram bot cannot run without it.'
     )
   }
 

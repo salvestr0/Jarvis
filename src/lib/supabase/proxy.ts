@@ -8,11 +8,12 @@ import { getSupabasePublishableKey, getSupabaseUrl, isAllowedEmail } from './env
  *
  * `/api/cron` is here because the scheduled price job has no user session —
  * it authenticates itself with a bearer secret inside the route handler.
- * Being listed here does NOT make it public: the route rejects any request
- * without the correct CRON_SECRET, and refuses to run at all if that secret
- * isn't configured.
+ * `/api/telegram` is the same story: Telegram authenticates itself with the
+ * X-Telegram-Bot-Api-Secret-Token header inside the route handler.
+ * Being listed here does NOT make them public: both routes reject requests
+ * without the correct secret, and refuse to run at all when unconfigured.
  */
-const PUBLIC_PATHS = ['/login', '/auth', '/api/cron']
+const PUBLIC_PATHS = ['/login', '/auth', '/api/cron', '/api/telegram']
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

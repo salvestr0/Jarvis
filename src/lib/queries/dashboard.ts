@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import type { Db } from '@/lib/queries/db'
 
 export type NetWorthPoint = {
   asOf: string
@@ -17,13 +18,18 @@ export type NetWorthPoint = {
  * fills in automatically.
  */
 export async function getNetWorthHistory(
-  limit = 90
+  limit = 90,
+  db?: Db
 ): Promise<NetWorthPoint[]> {
-  const supabase = await createClient()
+  const supabase = db?.client ?? (await createClient())
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('net_worth_snapshots')
     .select('as_of, total_cents, investments_cents, cash_cents')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+
+  const { data, error } = await query
     .order('as_of', { ascending: false })
     .limit(limit)
 

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import type { Db } from '@/lib/queries/db'
 
 export type SalaryPeriod = 'monthly' | 'annual'
 
@@ -24,13 +25,16 @@ export type Win = {
   detail: string | null
 }
 
-export async function getJobs(): Promise<Job[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getJobs(db?: Db): Promise<Job[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('jobs')
     .select(
       'id, employer, title, started_on, ended_on, salary_cents, salary_currency, salary_period, note'
     )
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query
     // Current role (ended_on null) first, then most recent.
     .order('ended_on', { ascending: false, nullsFirst: true })
     .order('started_on', { ascending: false })
@@ -39,11 +43,13 @@ export async function getJobs(): Promise<Job[]> {
   return (data ?? []) as Job[]
 }
 
-export async function getWins(): Promise<Win[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getWins(db?: Db): Promise<Win[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('job_wins')
     .select('id, job_id, occurred_on, title, detail')
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query
     .order('occurred_on', { ascending: false })
     .order('created_at', { ascending: false })
 

@@ -67,6 +67,9 @@ const SECRET_KEYS = [
   'SUPABASE_DB_URL',
   'CRON_SECRET',
   'FINNHUB_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_WEBHOOK_SECRET',
 ]
 
 const secrets = SECRET_KEYS.map((k) => [k, env[k]]).filter(
@@ -162,7 +165,7 @@ console.log('\n=== 3. No dangerous NEXT_PUBLIC_ vars ===')
 {
   // NEXT_PUBLIC_ is what ships a value to the browser. These names must never
   // carry it, regardless of what the value happens to be.
-  const banned = /^NEXT_PUBLIC_.*(SERVICE_ROLE|SECRET|PASSWORD|DB_URL|PRIVATE|_KEY$)/i
+  const banned = /^NEXT_PUBLIC_.*(SERVICE_ROLE|SECRET|PASSWORD|DB_URL|PRIVATE|TOKEN|_KEY$)/i
   const offenders = Object.keys(env).filter(
     (k) => banned.test(k) && !/PUBLISHABLE|ANON/i.test(k)
   )

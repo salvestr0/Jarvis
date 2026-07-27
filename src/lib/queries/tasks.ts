@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import type { Db } from '@/lib/queries/db'
 
 export type TaskPriority = 'low' | 'medium' | 'high'
 
@@ -20,14 +21,16 @@ export type TaskRow = Task & {
   goal_title: string | null
 }
 
-export async function getTasks(): Promise<TaskRow[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+export async function getTasks(db?: Db): Promise<TaskRow[]> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('tasks')
     .select(
       'id, goal_id, title, priority, due_on, done, done_at, note, goals (title)'
     )
-    .order('created_at', { ascending: false })
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+  const { data, error } = await query.order('created_at', { ascending: false })
 
   if (error) throw new Error(`Could not load tasks: ${error.message}`)
 
@@ -46,16 +49,20 @@ export type TaskInput = {
   note: string | null
 }
 
-export async function createTask(input: TaskInput): Promise<void> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+export async function createTask(input: TaskInput, db?: Db): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let userId = db?.userId
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not signed in.')
+    userId = user.id
+  }
 
   const { error } = await supabase
     .from('tasks')
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...input, user_id: userId })
 
   if (error) throw new Error(`Could not save: ${error.message}`)
 }
@@ -66,12 +73,18 @@ export async function updateTask(id: string, input: TaskInput): Promise<void> {
   if (error) throw new Error(`Could not update: ${error.message}`)
 }
 
-export async function setTaskDone(id: string, done: boolean): Promise<void> {
-  const supabase = await createClient()
-  const { error } = await supabase
+export async function setTaskDone(
+  id: string,
+  done: boolean,
+  db?: Db
+): Promise<void> {
+  const supabase = db?.client ?? (await createClient())
+  let query = supabase
     .from('tasks')
     .update({ done, done_at: done ? new Date().toISOString() : null })
     .eq('id', id)
+  if (db) query = query.eq('user_id', db.userId)
+  const { error } = await query
   if (error) throw new Error(`Could not update: ${error.message}`)
 }
 
