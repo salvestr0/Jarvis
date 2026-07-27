@@ -169,6 +169,64 @@ of the story, including its last delivery error.
 
 ---
 
+## 8. Phase 3 — Google + the morning digest
+
+Jarvis reads your Google Calendar and Gmail (read-only) and sends a morning
+briefing on Telegram. Behavior is controlled at **/settings** in the web app.
+
+### One-time Google setup
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → new project
+   (e.g. `jarvis-personal`).
+2. **APIs & Services → Library** → enable **Google Calendar API** and
+   **Gmail API**.
+3. **OAuth consent screen** → External → app name "Jarvis", your Gmail
+   everywhere it asks for an email.
+4. **Publish the app to "In production"** (Publishing status → Publish app).
+   It stays *unverified* — fine for personal use. **Do not skip this**: in
+   Testing mode, refresh tokens expire after 7 days and the digest silently
+   dies a week in.
+5. **Credentials → Create credentials → OAuth client ID → Desktop app** →
+   copy the Client ID and Client secret into `.env.local`.
+6. `npm run google:auth` → open the printed URL → sign in with the Google
+   account whose calendar/email Jarvis should read → "Advanced → continue"
+   past the unverified warning → allow the two read-only scopes → paste the
+   printed `GOOGLE_REFRESH_TOKEN=` line into `.env.local`.
+
+The scopes are `calendar.readonly` and `gmail.readonly` — Jarvis can never
+send mail, delete anything, or create events.
+
+### Deploy
+
+Three more Vercel env vars (server-only, never `NEXT_PUBLIC_`):
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`.
+
+Then `npm run db:migrate` (migration `0007_settings.sql`) and push. The new
+cron in `vercel.json` registers on deploy — **Settings → Cron Jobs** should
+show two:
+
+| Path | Schedule | What |
+|---|---|---|
+| `/api/cron/prices` | 01:00 UTC (09:00 SGT) | Prices + net worth snapshot |
+| `/api/cron/digest` | 02:00 UTC (10:00 SGT) | Morning briefing to Telegram |
+
+The digest deliberately runs an hour after prices: Hobby crons can fire up to
+~59 minutes late, and the briefing should see today's numbers. (Hobby also
+caps you at two cron jobs — these are both slots.)
+
+Test it by hand:
+
+```bash
+curl -H "Authorization: Bearer <CRON_SECRET>" \
+  https://<your-app>.vercel.app/api/cron/digest
+```
+
+Expect `{"ok":true,...}` with a report, and the briefing on your phone.
+Digest behavior (every morning / only when noteworthy / off, and which
+sections it covers) lives at **/settings**.
+
+---
+
 ## After every change
 
 ```bash

@@ -113,6 +113,53 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     input_schema: { type: 'object', properties: {} },
   },
 
+  // --- Google, read-only ---------------------------------------------------
+  {
+    name: 'get_calendar_events',
+    description:
+      "Call this when the user asks about his schedule, meetings, appointments, or what's on his calendar. Read-only Google Calendar.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'integer',
+          description: 'How many days ahead to look, from today (default 7, max 60)',
+        },
+      },
+    },
+  },
+  {
+    name: 'search_email',
+    description:
+      'Call this when the user asks about his email ("any email from the bank?", "unread mail?"). Read-only Gmail search. Supports Gmail query syntax: from:alice, subject:invoice, newer_than:2d, is:unread, has:attachment. Returns sender, subject, date, snippet and an id for get_email.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Gmail search query, e.g. "from:dbs newer_than:7d"',
+        },
+        max: {
+          type: 'integer',
+          description: 'Max results (default 5, max 10)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_email',
+    description:
+      'Call this when the user wants to read a specific email in full. Get the id from search_email first. Read-only.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Message id from search_email' },
+      },
+      required: ['id'],
+    },
+  },
+
   // --- writes --------------------------------------------------------------
   {
     name: 'log_transaction',

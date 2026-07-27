@@ -89,10 +89,30 @@ table — final text only, last ~20 turns replayed for context.
 
 Set it up with `npm run telegram:setup` after deploying (see DEPLOY.md).
 
-**Then: proactive.** Once Jarvis can read the data and reach you, the interesting
-version isn't answering questions — it's noticing. Spending up 40% this month.
-A position down 30%. A subscription you forgot. That's Phase 3, and the daily
-cron already gives it a heartbeat to run on.
+---
+
+## Letting it act — Phase 3
+
+Phase 3 is live too: Jarvis notices things and speaks first.
+
+**Read-only Google.** Three more tools — `get_calendar_events`, `search_email`,
+`get_email` — backed by OAuth scopes that can only *read*. "What's on
+tomorrow?", "any email from the bank this week?" work from Telegram. Jarvis
+cannot send mail, delete anything, or create events.
+
+**The morning digest.** A second daily cron (10:00 SGT, an hour after prices
+so the numbers are fresh) runs a rules engine over the data — bills due within
+3 days, overdue tasks, portfolio moves ≥ 3% or S$500, spending ≥ 130% of your
+usual pace, goal deadlines, net-worth highs — pulls today's calendar and
+unread email, and has Claude write a short briefing to Telegram. If the model
+API is down, a deterministic fallback renders the same facts; the briefing
+always goes out. It also lands in chat history, so "wait, which bill?" just
+works.
+
+**You control it at /settings**: every morning, only when something's
+noteworthy, or off — plus which sections it covers. The signal thresholds are
+pure functions with unit tests (`src/lib/jarvis/signals.ts`), because silent
+threshold logic is where alert systems rot.
 
 ---
 

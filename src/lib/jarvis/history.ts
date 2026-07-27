@@ -33,6 +33,22 @@ export async function loadHistory(db: Db, limit = 20): Promise<ChatTurn[]> {
   return turns
 }
 
+/**
+ * A single assistant message with no user turn — how the morning digest
+ * enters the conversation, so a follow-up question ("which bill?") has it
+ * in context. Legal for the Messages API: only the FIRST replayed message
+ * must be from the user, and loadHistory already drops leading assistant
+ * rows when the window slices badly.
+ */
+export async function saveAssistantNote(db: Db, text: string): Promise<void> {
+  const { error } = await db.client.from('chat_messages').insert({
+    user_id: db.userId,
+    role: 'assistant',
+    content: text,
+  })
+  if (error) throw new Error(`Could not save digest to history: ${error.message}`)
+}
+
 export async function saveTurn(
   db: Db,
   userText: string,

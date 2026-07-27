@@ -1,6 +1,8 @@
 import 'server-only'
 
 import { currentMonth, isValidMonth, todayISO } from '@/lib/date'
+import { listEvents } from '@/lib/google/calendar'
+import { getMessage, searchMessages } from '@/lib/google/gmail'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
@@ -98,6 +100,22 @@ function monthFrom(input: Record<string, unknown>): string {
   const month = optionalString(input, 'month') ?? currentMonth()
   if (!isValidMonth(month)) throw new Error('month must be YYYY-MM.')
   return month
+}
+
+function clampedInt(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, Math.round(value)))
+    : fallback
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
 export async function executeTool(
@@ -295,6 +313,37 @@ export async function executeTool(
           users: p.usersCount,
           url: p.url,
         })),
+      })
+    }
+
+    // --- Google, read-only ---------------------------------------------------
+
+    case 'get_calendar_events': {
+      const days = clampedInt(input.days, 7, 1, 60)
+      const today = todayISO()
+      const events = await listEvents({
+        // Explicit +08:00 — the calendar day must be the Singapore day.
+        timeMin: `${today}T00:00:00+08:00`,
+        timeMax: `${addDaysISO(today, days)}T00:00:00+08:00`,
+        maxResults: 25,
+      })
+      return JSON.stringify({ today, days_ahead: days, events })
+    }
+
+    case 'search_email': {
+      const query = requiredString(input, 'query')
+      const max = clampedInt(input.max, 5, 1, 10)
+      const emails = await searchMessages(query, max)
+      return JSON.stringify({ query, results: emails })
+    }
+
+    case 'get_email': {
+      const message = await getMessage(requiredString(input, 'id'))
+      const truncated = message.body.length > 2000
+      return JSON.stringify({
+        ...message,
+        body: truncated ? `${message.body.slice(0, 2000)}…` : message.body,
+        truncated,
       })
     }
 

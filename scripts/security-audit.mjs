@@ -70,6 +70,8 @@ const SECRET_KEYS = [
   'ANTHROPIC_API_KEY',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_WEBHOOK_SECRET',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REFRESH_TOKEN',
 ]
 
 const secrets = SECRET_KEYS.map((k) => [k, env[k]]).filter(

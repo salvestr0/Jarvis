@@ -13,6 +13,7 @@
     "check:actions": "node scripts/check-actions.mjs",
     "audit": "node scripts/security-audit.mjs",
     "telegram:setup": "node scripts/telegram-setup.mjs",
+    "google:auth": "node scripts/google-auth.mjs",
     "verify": "npm run check:actions && tsc --noEmit && npm test && npm run build"
   },
   "dependencies": {
