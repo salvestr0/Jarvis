@@ -160,6 +160,48 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
 
+  // --- Google, write (create-only: no send, no update, no delete) ----------
+  {
+    name: 'create_calendar_event',
+    description:
+      'Call this when the user asks to put something on his calendar ("schedule lunch with Marcus Friday 1pm"). Creates one event on his primary Google Calendar. This is an ADD: do it immediately, then confirm in one line. Times are Singapore time. Omit time for an all-day event.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Event title' },
+        date: { type: 'string', description: 'Event date, YYYY-MM-DD' },
+        time: {
+          type: 'string',
+          description: 'Start time HH:MM (24h, Singapore). Omit for an all-day event.',
+        },
+        duration_minutes: {
+          type: 'integer',
+          description: 'Length in minutes (default 60). Ignored for all-day events.',
+        },
+        location: { type: 'string', description: 'Optional location' },
+        description: { type: 'string', description: 'Optional details/notes' },
+      },
+      required: ['summary', 'date'],
+    },
+  },
+  {
+    name: 'create_email_draft',
+    description:
+      'Call this when the user asks to write, draft, or reply to an email. Creates a DRAFT in his Gmail — it is NEVER sent; he reviews and sends it from Gmail himself, so drafting is an ADD: do it immediately. Write the body in his voice, plain text, no signature unless he asks. You cannot send email at all.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Recipient address(es), comma-separated if several',
+        },
+        subject: { type: 'string', description: 'Subject line' },
+        body: { type: 'string', description: 'Plain-text email body' },
+      },
+      required: ['to', 'subject', 'body'],
+    },
+  },
+
   // --- memory --------------------------------------------------------------
   {
     name: 'remember',

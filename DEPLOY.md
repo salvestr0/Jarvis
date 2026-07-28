@@ -171,8 +171,9 @@ of the story, including its last delivery error.
 
 ## 8. Phase 3 — Google + the morning digest
 
-Jarvis reads your Google Calendar and Gmail (read-only) and sends a morning
-briefing on Telegram. Behavior is controlled at **/settings** in the web app.
+Jarvis reads your Google Calendar and Gmail, can create calendar events and
+Gmail drafts, and sends a morning briefing on Telegram. Behavior is
+controlled at **/settings** in the web app.
 
 ### One-time Google setup
 
@@ -189,12 +190,21 @@ briefing on Telegram. Behavior is controlled at **/settings** in the web app.
 5. **Credentials → Create credentials → OAuth client ID → Desktop app** →
    copy the Client ID and Client secret into `.env.local`.
 6. `npm run google:auth` → open the printed URL → sign in with the Google
-   account whose calendar/email Jarvis should read → "Advanced → continue"
-   past the unverified warning → allow the two read-only scopes → paste the
-   printed `GOOGLE_REFRESH_TOKEN=` line into `.env.local`.
+   account whose calendar/email Jarvis should use → "Advanced → continue"
+   past the unverified warning → allow the four scopes → paste the printed
+   `GOOGLE_REFRESH_TOKEN=` line into `.env.local`.
 
-The scopes are `calendar.readonly` and `gmail.readonly` — Jarvis can never
-send mail, delete anything, or create events.
+The scopes are `calendar.readonly`, `gmail.readonly`, `calendar.events`
+(create/edit events), and `gmail.compose` (manage drafts). Jarvis's tools
+only ever CREATE events and drafts — nothing can send mail or delete
+anything. A draft sits in Gmail until you send it yourself.
+
+**Re-consent (when scopes change):** the refresh token is bound to the
+scopes it was minted with, so after any scope change rerun
+`npm run google:auth`, replace `GOOGLE_REFRESH_TOKEN` in `.env.local` AND in
+Vercel (Settings → Environment Variables), then redeploy. A write tool
+failing with HTTP 403 while reads still work means the token predates the
+write scopes.
 
 ### Deploy
 

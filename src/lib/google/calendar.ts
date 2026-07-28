@@ -1,8 +1,8 @@
 import 'server-only'
 
-import { googleGet } from './auth'
+import { googleGet, googlePost } from './auth'
 
-/** Read-only view of the primary Google Calendar. */
+/** The primary Google Calendar: list events, create events. Never deletes. */
 
 export type CalendarEvent = {
   summary: string
@@ -53,4 +53,31 @@ export async function listEvents(opts: {
     location: ev.location ?? null,
     allDay: Boolean(ev.start?.date),
   }))
+}
+
+/**
+ * Create one event on the primary calendar. Timed events pass RFC3339
+ * start/end with the +08:00 offset already applied by the caller; all-day
+ * events pass plain dates (end exclusive, per the Calendar API).
+ */
+export async function createEvent(opts: {
+  summary: string
+  start: { dateTime: string } | { date: string }
+  end: { dateTime: string } | { date: string }
+  location?: string
+  description?: string
+}): Promise<{ htmlLink: string | null }> {
+  const payload = (await googlePost(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+    {
+      summary: opts.summary,
+      start: opts.start,
+      end: opts.end,
+      ...(opts.location ? { location: opts.location } : {}),
+      ...(opts.description ? { description: opts.description } : {}),
+    },
+    'Google Calendar create'
+  )) as { htmlLink?: string }
+
+  return { htmlLink: payload.htmlLink ?? null }
 }

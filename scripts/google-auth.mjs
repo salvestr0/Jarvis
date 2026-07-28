@@ -1,5 +1,5 @@
 /**
- * One-time mint of the Google refresh token (read-only Calendar + Gmail).
+ * One-time mint of the Google refresh token (Calendar + Gmail).
  *
  *   npm run google:auth
  *
@@ -24,6 +24,11 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
+  // Write tier: create/edit events, and manage drafts. gmail.compose is the
+  // narrowest scope that can create a draft — it technically permits sending,
+  // but no Jarvis tool ever calls drafts.send; Jayden sends from Gmail.
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/gmail.compose',
 ].join(' ')
 
 function loadEnvLocal() {
@@ -71,7 +76,8 @@ server.listen(0, '127.0.0.1', () => {
     })
 
   console.log(
-    '\nOpen this URL in your browser and approve the two read-only scopes:\n'
+    '\nOpen this URL in your browser and approve the four scopes\n' +
+      '(read Calendar/Gmail, create events, manage drafts):\n'
   )
   console.log(authUrl + '\n')
   console.log('(If Google warns the app is unverified: Advanced -> continue.)\n')

@@ -1,7 +1,8 @@
 import 'server-only'
 
 /**
- * Google OAuth for the bot — read-only Calendar and Gmail.
+ * Google OAuth for the bot — Calendar and Gmail (read, plus event-create and
+ * draft-create; nothing here can send mail or delete).
  *
  * One long-lived refresh token (minted once with `npm run google:auth`) is
  * exchanged here for short-lived access tokens. The access token is cached in
@@ -76,6 +77,23 @@ export async function getAccessToken(): Promise<string> {
 
 /** Authenticated GET against a Google API, house fetch style. */
 export async function googleGet(url: string, label: string): Promise<unknown> {
+  return googleFetch(url, undefined, label)
+}
+
+/** Authenticated POST with a JSON body — used by the write tools. */
+export async function googlePost(
+  url: string,
+  body: unknown,
+  label: string
+): Promise<unknown> {
+  return googleFetch(url, body, label)
+}
+
+async function googleFetch(
+  url: string,
+  body: unknown | undefined,
+  label: string
+): Promise<unknown> {
   const token = await getAccessToken()
 
   const controller = new AbortController()
@@ -83,8 +101,14 @@ export async function googleGet(url: string, label: string): Promise<unknown> {
 
   try {
     const res = await fetch(url, {
+      method: body === undefined ? 'GET' : 'POST',
       signal: controller.signal,
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'application/json',
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: 'no-store',
     })
 
@@ -92,6 +116,13 @@ export async function googleGet(url: string, label: string): Promise<unknown> {
       // A 401 means the access token went stale early — drop the cache so the
       // next call refreshes instead of failing for up to an hour.
       if (res.status === 401) cached = null
+      // A 403 on a write means the refresh token predates the write scopes —
+      // rerun `npm run google:auth` and update GOOGLE_REFRESH_TOKEN.
+      if (res.status === 403 && body !== undefined) {
+        throw new Error(
+          `${label} returned HTTP 403 — the Google token may lack write scopes (rerun npm run google:auth)`
+        )
+      }
       throw new Error(`${label} returned HTTP ${res.status}`)
     }
     return await res.json()

@@ -1,8 +1,8 @@
 import 'server-only'
 
 import { currentMonth, isValidMonth, todayISO } from '@/lib/date'
-import { listEvents } from '@/lib/google/calendar'
-import { getMessage, searchMessages } from '@/lib/google/gmail'
+import { createEvent, listEvents } from '@/lib/google/calendar'
+import { createDraft, getMessage, searchMessages } from '@/lib/google/gmail'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
@@ -419,6 +419,59 @@ export async function executeTool(
         ...message,
         body: truncated ? `${message.body.slice(0, 2000)}…` : message.body,
         truncated,
+      })
+    }
+
+    // --- Google, write (create-only) -----------------------------------------
+
+    case 'create_calendar_event': {
+      const summary = requiredString(input, 'summary')
+      const date = requiredString(input, 'date')
+      if (!ISO_DATE.test(date)) throw new Error('date must be YYYY-MM-DD.')
+      const time = optionalString(input, 'time')
+      const location = optionalString(input, 'location') ?? undefined
+      const description = optionalString(input, 'description') ?? undefined
+
+      let start: { dateTime: string } | { date: string }
+      let end: { dateTime: string } | { date: string }
+      if (time === null) {
+        // All-day: the API's end date is exclusive.
+        start = { date }
+        end = { date: addDaysISO(date, 1) }
+      } else {
+        const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time)
+        if (!match) throw new Error('time must be HH:MM (24h).')
+        const duration = clampedInt(input.duration_minutes, 60, 5, 24 * 60)
+        const endTotal =
+          Number(match[1]) * 60 + Number(match[2]) + duration
+        const endTime = `${String(Math.floor(endTotal / 60) % 24).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`
+        // Explicit +08:00 — event times are Singapore wall-clock times.
+        start = { dateTime: `${date}T${time}:00+08:00` }
+        end = {
+          dateTime: `${addDaysISO(date, Math.floor(endTotal / (24 * 60)))}T${endTime}:00+08:00`,
+        }
+      }
+
+      const created = await createEvent({ summary, start, end, location, description })
+      return JSON.stringify({
+        created: true,
+        summary,
+        date,
+        time: time ?? 'all-day',
+        link: created.htmlLink,
+      })
+    }
+
+    case 'create_email_draft': {
+      const draft = await createDraft({
+        to: requiredString(input, 'to'),
+        subject: requiredString(input, 'subject'),
+        body: requiredString(input, 'body'),
+      })
+      return JSON.stringify({
+        draft_created: true,
+        draft_id: draft.id,
+        note: 'Draft only — it will not send until Jayden sends it from Gmail.',
       })
     }
 

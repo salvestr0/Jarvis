@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { decodeBase64Url, extractPlainText, type MimePart } from './mime.ts'
+import {
+  buildRawMessage,
+  decodeBase64Url,
+  extractPlainText,
+  type MimePart,
+} from './mime.ts'
 
 function b64url(text: string): string {
   return Buffer.from(text, 'utf8')
@@ -65,4 +70,33 @@ test('empty and bodiless payloads return empty string, not a crash', () => {
     extractPlainText({ mimeType: 'multipart/mixed', parts: [] }),
     ''
   )
+})
+
+test('buildRawMessage produces headers and a decodable body', () => {
+  const raw = buildRawMessage('alice@example.com', 'Hello', 'Hi Alice,\nsee you soon.')
+  const decoded = decodeBase64Url(raw)
+  assert.ok(decoded.startsWith('To: alice@example.com\r\n'))
+  assert.ok(decoded.includes('Subject: Hello\r\n'))
+  const bodyB64 = decoded.split('\r\n\r\n')[1]
+  assert.equal(
+    Buffer.from(bodyB64, 'base64').toString('utf8'),
+    'Hi Alice,\nsee you soon.'
+  )
+})
+
+test('buildRawMessage encodes non-ASCII subjects as an RFC 2047 word', () => {
+  const raw = buildRawMessage('a@b.co', 'Café ☕', 'x')
+  const decoded = decodeBase64Url(raw)
+  const subject = decoded.split('\r\n').find((l) => l.startsWith('Subject: '))
+  assert.ok(subject !== undefined)
+  assert.ok(subject.startsWith('Subject: =?UTF-8?B?'))
+  assert.equal(
+    Buffer.from(subject.slice('Subject: =?UTF-8?B?'.length, -2), 'base64').toString('utf8'),
+    'Café ☕'
+  )
+})
+
+test('buildRawMessage rejects header injection via to or subject', () => {
+  assert.throws(() => buildRawMessage('a@b.co\r\nBcc: evil@x.co', 's', 'b'))
+  assert.throws(() => buildRawMessage('a@b.co', 'hi\nX-Evil: 1', 'b'))
 })

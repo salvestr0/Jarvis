@@ -1,9 +1,12 @@
 import 'server-only'
 
-import { googleGet } from './auth'
-import { extractPlainText, type MimePart } from './mime'
+import { googleGet, googlePost } from './auth'
+import { buildRawMessage, extractPlainText, type MimePart } from './mime'
 
-/** Read-only view of Gmail. Search + read; nothing here can send or delete. */
+/**
+ * Gmail: search, read, and create drafts. Nothing here can SEND or delete —
+ * a draft sits in the Drafts folder until Jayden reviews and sends it himself.
+ */
 
 export type EmailSummary = {
   id: string
@@ -66,6 +69,21 @@ export async function searchMessages(q: string, max = 5): Promise<EmailSummary[]
       }
     })
   )
+}
+
+/** Create a draft (never sends). Returns the draft id for reference. */
+export async function createDraft(opts: {
+  to: string
+  subject: string
+  body: string
+}): Promise<{ id: string | null }> {
+  const payload = (await googlePost(
+    'https://www.googleapis.com/gmail/v1/users/me/drafts',
+    { message: { raw: buildRawMessage(opts.to, opts.subject, opts.body) } },
+    'Gmail draft create'
+  )) as { id?: string }
+
+  return { id: payload.id ?? null }
 }
 
 /** Full readable body of one message (id from searchMessages). */
