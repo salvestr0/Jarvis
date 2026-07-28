@@ -1,0 +1,9 @@
+{
+  "roots": {
+    "Desktop": "C:\\Users\\User\\OneDrive\\Desktop",
+    "Documents": "C:\\Users\\User\\OneDrive\\Documents",
+    "Downloads": "C:\\Users\\User\\Downloads"
+  },
+  "pollMs": 2500,
+  "heartbeatMs": 30000
+}

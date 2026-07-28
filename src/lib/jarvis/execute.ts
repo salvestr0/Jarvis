@@ -3,6 +3,7 @@ import 'server-only'
 import { currentMonth, isValidMonth, todayISO } from '@/lib/date'
 import { createEvent, listEvents } from '@/lib/google/calendar'
 import { createDraft, getMessage, searchMessages } from '@/lib/google/gmail'
+import { createPcJob, getPcJob, isPcOnline, waitForPcJob } from '@/lib/queries/pc'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
@@ -159,6 +160,18 @@ function clampedInt(
 function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
+/**
+ * A pc_read_file result can carry up to 64KB — same context-bloat concern
+ * as get_email, same fix: clamp what the model sees, flag the cut.
+ */
+function clampPcResult(result: Record<string, unknown> | null): Record<string, unknown> {
+  if (!result) return {}
+  if (typeof result.content === 'string' && result.content.length > 4000) {
+    return { ...result, content: `${result.content.slice(0, 4000)}…`, truncated: true }
+  }
+  return result
 }
 
 /**
@@ -473,6 +486,37 @@ export async function executeTool(
         draft_id: draft.id,
         note: 'Draft only — it will not send until Jayden sends it from Gmail.',
       })
+    }
+
+    // --- PC access, tier 1 (read-only) --------------------------------------
+
+    case 'pc_list_dir':
+    case 'pc_read_file':
+    case 'pc_search_files': {
+      if (!(await isPcOnline(db))) {
+        return JSON.stringify({
+          pc_offline: true,
+          note: 'His PC agent is not running. Tell him to start it with `npm run pc:agent` if he wants PC access.',
+        })
+      }
+      const kind =
+        name === 'pc_list_dir' ? 'list_dir' : name === 'pc_read_file' ? 'read_file' : 'search_files'
+      const jobId = await createPcJob(db, kind, input)
+      const job = await waitForPcJob(db, jobId)
+      if (!job || job.status === 'pending' || job.status === 'running') {
+        return JSON.stringify({
+          job_id: jobId,
+          status: 'still_running',
+          note: 'Check again with pc_job_status.',
+        })
+      }
+      return JSON.stringify({ status: job.status, ...clampPcResult(job.result) })
+    }
+
+    case 'pc_job_status': {
+      const job = await getPcJob(db, requiredString(input, 'job_id'))
+      if (!job) throw new Error('No PC job found with that id.')
+      return JSON.stringify({ status: job.status, ...clampPcResult(job.result) })
     }
 
     // --- memory ------------------------------------------------------------

@@ -73,16 +73,22 @@ const SECRET_KEYS = [
   'GOOGLE_CLIENT_SECRET',
   'GOOGLE_REFRESH_TOKEN',
   'GROQ_API_KEY',
+  'PC_AGENT_DB_URL',
 ]
 
 const secrets = SECRET_KEYS.map((k) => [k, env[k]]).filter(
   ([, v]) => v && v.length > 8
 )
 
-// The database password on its own, since it can appear outside the full URL.
-if (env.SUPABASE_DB_URL) {
-  const m = env.SUPABASE_DB_URL.match(/:\/\/[^:]+:([^@]+)@/)
-  if (m && m[1].length > 4) secrets.push(['DB_PASSWORD', m[1]])
+// Database passwords on their own, since they can appear outside a full URL.
+for (const [key, label] of [
+  ['SUPABASE_DB_URL', 'DB_PASSWORD'],
+  ['PC_AGENT_DB_URL', 'PC_AGENT_PASSWORD'],
+]) {
+  if (env[key]) {
+    const m = env[key].match(/:\/\/[^:]+:([^@]+)@/)
+    if (m && m[1].length > 4) secrets.push([label, m[1]])
+  }
 }
 
 console.log('\n=== 1. Secrets are not committed ===')

@@ -9,11 +9,13 @@
     "lint": "eslint",
     "db:migrate": "node scripts/migrate.mjs",
     "db:check": "node scripts/db-check.mjs",
-    "test": "node --test \"src/**/*.test.ts\"",
+    "test": "node --test \"src/**/*.test.ts\" \"pc-agent/**/*.test.mjs\"",
     "check:actions": "node scripts/check-actions.mjs",
     "audit": "node scripts/security-audit.mjs",
     "telegram:setup": "node scripts/telegram-setup.mjs",
     "google:auth": "node scripts/google-auth.mjs",
+    "pc:setup": "node scripts/pc-agent-setup.mjs",
+    "pc:agent": "node pc-agent/agent.mjs",
     "verify": "npm run check:actions && tsc --noEmit && npm test && npm run build"
   },
   "dependencies": {

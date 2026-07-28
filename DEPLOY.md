@@ -255,6 +255,36 @@ without affecting anything else.
 
 ---
 
+## 10. PC access (tier 1, read-only)
+
+Jarvis can list, read, and search files in **Desktop, Documents, and
+Downloads** — via a local agent, only while it is running. Design and
+threat model: `tasks/pc-access-design.md`.
+
+One-time setup:
+
+1. `npm run db:migrate` (migration `0009_pc_access.sql` — tables + the
+   boxed `pc_agent` database role).
+2. `npm run pc:setup` → paste the printed `PC_AGENT_DB_URL=` line into
+   `.env.local`. **Never add this one to Vercel** — it belongs to the PC
+   only. It can touch nothing but the two `pc_*` tables.
+3. No new Vercel env vars, no deploy config — just push.
+
+Run it when you want PC access on:
+
+```bash
+npm run pc:agent
+```
+
+Ctrl-C stops it; Jarvis reports "PC offline" within 90 seconds. The agent
+opens no ports — it only connects out to the database. Folder allowlist and
+the secrets deny-list live in `pc-agent/config.json` and
+`pc-agent/sandbox.mjs` on the PC, so nothing cloud-side can widen them.
+Every job, including refusals, stays in `pc_jobs` — ask Jarvis "what did
+you do on my PC this week?" to audit.
+
+---
+
 ## After every change
 
 ```bash

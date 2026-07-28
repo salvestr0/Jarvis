@@ -180,3 +180,19 @@ Claude Opus 5 manual tool loop (15 tools over `src/lib/queries/*`) →
 **The day in one line:** idea → deployed tracker → Telegram voice →
 Google-connected, memory-bearing, self-starting assistant. All three phases
 of the original plan shipped in one session.
+
+## 28 Jul 2026 — Google writes + PC access tier 1
+
+- [x] Google write tier: create_calendar_event + create_email_draft
+      (calendar.events + gmail.compose scopes, re-consent done, verified
+      live). Create-only: no send, no update/delete; drafts wait in Gmail.
+- [x] PC access design locked with Jayden (tasks/pc-access-design.md):
+      outbound-only agent, tiered capabilities, policy lives on the PC.
+- [x] PC access Phase A shipped: 0009 migration (pc_jobs audit log +
+      pc_heartbeat + boxed pc_agent role), pc-agent/ (sandbox + executors +
+      loop, 7 new tests), 4 read-only bot tools, anti-exfiltration prompt
+      rule, pc:setup / pc:agent scripts, DEPLOY.md §10. E2E verified live:
+      reads work, .env.local and C:\Windows refused, node_modules skipped.
+- [ ] Jayden: test PC tools + Google writes from Telegram
+- [ ] Phase B (open_app / screenshot / lock / sleep via PC-side
+      actions.json) — after tier 1 proves out
