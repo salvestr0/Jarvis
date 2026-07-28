@@ -17,12 +17,13 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 
+import { runAction, validateActions } from './actions.mjs'
 import { EXECUTORS, Refusal } from './executors.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
 
-const VERSION = 'pc-agent/1 tier-1'
+const VERSION = 'pc-agent/2 tier-1+actions'
 // A job older than this was queued while the PC was offline; running stale
 // requests long after they were asked would surprise, so they expire.
 const EXPIRE_SECONDS = 120
@@ -61,6 +62,17 @@ for (const [alias, dir] of Object.entries(config.roots)) {
     console.error(`Root "${alias}" does not exist: ${dir} — fix pc-agent/config.json.`)
     process.exit(1)
   }
+}
+
+// Tier 2: the named-action allowlist, validated up front so a broken edit
+// stops the agent instead of failing job by job.
+const actions = validateActions(
+  JSON.parse(readFileSync(join(here, 'actions.json'), 'utf8'))
+)
+
+const HANDLERS = {
+  ...EXECUTORS,
+  run_action: (payload) => runAction(payload, actions),
 }
 
 let client = null
@@ -109,7 +121,7 @@ async function finish(id, status, result) {
 }
 
 async function runJob(job) {
-  const executor = EXECUTORS[job.kind]
+  const executor = HANDLERS[job.kind]
   if (!executor) {
     await finish(job.id, 'error', { error: `Unknown job kind: ${job.kind}` })
     return
@@ -131,6 +143,7 @@ async function runJob(job) {
 
 async function main() {
   console.log(`${VERSION} starting. Roots: ${Object.values(config.roots).join(', ')}`)
+  console.log(`Actions: ${Object.keys(actions).join(', ')}`)
   let lastHeartbeat = 0
 
   while (!stopping) {

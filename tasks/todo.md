@@ -196,3 +196,8 @@ of the original plan shipped in one session.
 - [ ] Jayden: test PC tools + Google writes from Telegram
 - [ ] Phase B (open_app / screenshot / lock / sleep via PC-side
       actions.json) — after tier 1 proves out
+- [x] PC access Phase B shipped: run_action tool + PC-side actions.json
+      allowlist (screenshot -> Telegram photo, open_app x6, lock_screen,
+      sleep), literal-argv-only, needs_confirm gate, 5 new tests. Screenshot
+      is a compiled C# helper (PowerShell version trips Defender AMSI). E2E
+      verified: screenshot JPEG, unknown-action refusals, notepad launch.

@@ -109,6 +109,48 @@ export async function sendMessage(chatId: number, text: string): Promise<void> {
   await callTelegram('sendMessage', { chat_id: chatId, text })
 }
 
+/** Send a JPEG (PC screenshots). Multipart, since the bytes come from us. */
+export async function sendPhoto(chatId: number, jpeg: Uint8Array): Promise<void> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const form = new FormData()
+    form.append('chat_id', String(chatId))
+    // Copy into a fresh ArrayBuffer-backed view — TS's BlobPart rejects
+    // Uint8Array<ArrayBufferLike> (it could wrap a SharedArrayBuffer).
+    form.append(
+      'photo',
+      new Blob([new Uint8Array(jpeg)], { type: 'image/jpeg' }),
+      'screenshot.jpg'
+    )
+
+    const res = await fetch(botUrl('sendPhoto'), {
+      method: 'POST',
+      signal: controller.signal,
+      body: form,
+      cache: 'no-store',
+    })
+    const payload = (await res.json().catch(() => null)) as {
+      ok?: boolean
+      description?: string
+    } | null
+
+    if (!res.ok || payload?.ok === false) {
+      throw new Error(
+        `Telegram sendPhoto failed (HTTP ${res.status}): ${payload?.description ?? 'no description'}`
+      )
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Telegram sendPhoto timed out after ${TIMEOUT_MS / 1000}s`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * Show "typing…" while Claude works. Best-effort: a failure here must never
  * take down the actual reply.

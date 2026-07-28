@@ -44,3 +44,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Compiled on the PC by pc-agent (from screenshot.cs)
+pc-agent/*.exe

@@ -33,7 +33,7 @@ export async function isPcOnline(db: Db): Promise<boolean> {
 
 export async function createPcJob(
   db: Db,
-  kind: 'list_dir' | 'read_file' | 'search_files',
+  kind: 'list_dir' | 'read_file' | 'search_files' | 'run_action',
   payload: Record<string, unknown>
 ): Promise<string> {
   const { data, error } = await db.client

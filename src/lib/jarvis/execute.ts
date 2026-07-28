@@ -4,6 +4,7 @@ import { currentMonth, isValidMonth, todayISO } from '@/lib/date'
 import { createEvent, listEvents } from '@/lib/google/calendar'
 import { createDraft, getMessage, searchMessages } from '@/lib/google/gmail'
 import { createPcJob, getPcJob, isPcOnline, waitForPcJob } from '@/lib/queries/pc'
+import { sendPhoto } from '@/lib/telegram/api'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
@@ -163,11 +164,21 @@ function addDaysISO(iso: string, days: number): string {
 }
 
 /**
- * A pc_read_file result can carry up to 64KB — same context-bloat concern
- * as get_email, same fix: clamp what the model sees, flag the cut.
+ * Shape a PC job result for the model. Two concerns: a pc_read_file result
+ * can carry up to 64KB (same context-bloat fix as get_email: clamp and flag
+ * the cut), and a screenshot carries JPEG bytes the model should never see —
+ * those are relayed straight to Jayden's Telegram and replaced with a note.
  */
-function clampPcResult(result: Record<string, unknown> | null): Record<string, unknown> {
+async function relayPcResult(
+  result: Record<string, unknown> | null
+): Promise<Record<string, unknown>> {
   if (!result) return {}
+  if (typeof result.screenshot_b64 === 'string') {
+    const userId = Number(process.env.TELEGRAM_USER_ID)
+    if (!Number.isFinite(userId)) throw new Error('TELEGRAM_USER_ID is not set.')
+    await sendPhoto(userId, Buffer.from(result.screenshot_b64, 'base64'))
+    return { screenshot_sent: true, note: 'The screenshot is in the chat above this reply.' }
+  }
   if (typeof result.content === 'string' && result.content.length > 4000) {
     return { ...result, content: `${result.content.slice(0, 4000)}…`, truncated: true }
   }
@@ -492,7 +503,8 @@ export async function executeTool(
 
     case 'pc_list_dir':
     case 'pc_read_file':
-    case 'pc_search_files': {
+    case 'pc_search_files':
+    case 'pc_run_action': {
       if (!(await isPcOnline(db))) {
         return JSON.stringify({
           pc_offline: true,
@@ -500,7 +512,13 @@ export async function executeTool(
         })
       }
       const kind =
-        name === 'pc_list_dir' ? 'list_dir' : name === 'pc_read_file' ? 'read_file' : 'search_files'
+        name === 'pc_list_dir'
+          ? 'list_dir'
+          : name === 'pc_read_file'
+            ? 'read_file'
+            : name === 'pc_search_files'
+              ? 'search_files'
+              : 'run_action'
       const jobId = await createPcJob(db, kind, input)
       const job = await waitForPcJob(db, jobId)
       if (!job || job.status === 'pending' || job.status === 'running') {
@@ -510,13 +528,13 @@ export async function executeTool(
           note: 'Check again with pc_job_status.',
         })
       }
-      return JSON.stringify({ status: job.status, ...clampPcResult(job.result) })
+      return JSON.stringify({ status: job.status, ...(await relayPcResult(job.result)) })
     }
 
     case 'pc_job_status': {
       const job = await getPcJob(db, requiredString(input, 'job_id'))
       if (!job) throw new Error('No PC job found with that id.')
-      return JSON.stringify({ status: job.status, ...clampPcResult(job.result) })
+      return JSON.stringify({ status: job.status, ...(await relayPcResult(job.result)) })
     }
 
     // --- memory ------------------------------------------------------------

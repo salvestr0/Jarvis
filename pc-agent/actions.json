@@ -1,0 +1,35 @@
+{
+  "screenshot": {
+    "builtin": "screenshot",
+    "needs_confirm": false
+  },
+  "lock_screen": {
+    "argv": ["rundll32.exe", "user32.dll,LockWorkStation"],
+    "needs_confirm": false
+  },
+  "sleep": {
+    "argv": [
+      "powershell",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false)"
+    ],
+    "needs_confirm": false
+  },
+  "open_app": {
+    "needs_confirm": false,
+    "variants": {
+      "chrome": ["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"],
+      "edge": ["C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"],
+      "spotify": ["C:\\Users\\User\\AppData\\Roaming\\Spotify\\Spotify.exe"],
+      "discord": [
+        "C:\\Users\\User\\AppData\\Local\\Discord\\Update.exe",
+        "--processStart",
+        "Discord.exe"
+      ],
+      "telegram": ["C:\\Users\\User\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe"],
+      "notepad": ["notepad.exe"]
+    }
+  }
+}

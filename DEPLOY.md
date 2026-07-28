@@ -255,11 +255,18 @@ without affecting anything else.
 
 ---
 
-## 10. PC access (tier 1, read-only)
+## 10. PC access
 
 Jarvis can list, read, and search files in **Desktop, Documents, and
-Downloads** — via a local agent, only while it is running. Design and
-threat model: `tasks/pc-access-design.md`.
+Downloads**, and run a fixed set of actions — **screenshot** (delivered to
+Telegram), **open_app**, **lock_screen**, **sleep** — via a local agent,
+only while it is running. Design and threat model:
+`tasks/pc-access-design.md`.
+
+Actions are defined in `pc-agent/actions.json` ON the PC: every runnable
+thing is a literal command array (no templates, no shell), so the cloud can
+invoke by name but never define or reshape a command. Edit that file to
+add/remove apps; the agent validates it at startup.
 
 One-time setup:
 
