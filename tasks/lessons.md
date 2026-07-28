@@ -137,3 +137,19 @@ protected" and "is protected."
 version — treating "no allowlist configured" as "allow everyone" — turns a
 missing environment variable into a fully public app holding your salary and
 holdings. A misconfiguration should lock you out, not let strangers in.
+
+---
+
+## A pseudo-column must copy the real column's skeleton
+
+**What happened:** the kanban board's "+ Add category" tile floated visibly
+higher than the columns beside it. Real columns render a header row, then a
+`mt-2 p-1` body; the add tile skipped straight to its dashed box, so its top
+edge sat where its neighbours' headers were.
+
+**Fix:** give the placeholder the same skeleton — a header-height spacer
+(`h-7`) plus the identical body inset — instead of eyeballing margins.
+
+**Lesson:** when a decorative element sits in a row of structured siblings,
+alignment comes from copying their structure, not from custom spacing. Any
+later change to the real column's header height then moves both together.

@@ -201,3 +201,15 @@ of the original plan shipped in one session.
       sleep), literal-argv-only, needs_confirm gate, 5 new tests. Screenshot
       is a compiled C# helper (PowerShell version trips Defender AMSI). E2E
       verified: screenshot JPEG, unknown-action refusals, notepad launch.
+
+## Tasks kanban board — 28 Jul ✅ built + verified, awaiting your click-through
+- [x] Migration 0011: `task_categories` table + `tasks.category_id` / `tasks.position` — **applied to prod DB** (additive; deployed app unaffected)
+- [x] Position backfill preserves the old overdue-first order; new tasks (web or Telegram) land at the top of Uncategorised
+- [x] Queries: `task-categories.ts` (CRUD + reorder), `reorderTasks`; `TaskInput.category_id` optional so the bot compiles untouched
+- [x] Pure board logic `src/lib/tasks-board.ts` + 9 unit tests
+- [x] Board UI: dnd-kit columns, drag between/within, optimistic no-flicker saves, DragOverlay
+- [x] Category management: add (dashed column at right), rename / move left–right / delete via column ⋯ menu; delete keeps tasks
+- [x] TaskDialog gains a Category select; Done section unchanged
+- [x] `npm run verify` green (check-actions, tsc, 94 tests, build)
+- [ ] **You:** manual pass — drag within/across/into empty column + reload; rapid drags; done→reopen; delete category with tasks; add from Telegram lands in Uncategorised
+- [ ] Commit + push to deploy (nothing committed yet)

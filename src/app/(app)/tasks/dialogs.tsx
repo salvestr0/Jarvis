@@ -20,7 +20,7 @@ import { NativeSelect } from '@/components/field'
 import { emptyFormState } from '@/lib/form-state'
 import type { TaskRow } from '@/lib/queries/tasks'
 
-import { saveTask } from './actions'
+import { saveCategory, saveTask } from './actions'
 
 function SubmitButton({ idle }: { idle: string }) {
   const { pending } = useFormStatus()
@@ -34,10 +34,14 @@ function SubmitButton({ idle }: { idle: string }) {
 export function TaskDialog({
   existing,
   goals,
+  categories,
+  defaultCategoryId,
   trigger,
 }: {
   existing?: TaskRow
   goals: ReadonlyArray<{ id: string; title: string }>
+  categories: ReadonlyArray<{ id: string; name: string }>
+  defaultCategoryId?: string
   trigger: React.ReactElement
 }) {
   const [open, setOpen] = useState(false)
@@ -102,6 +106,24 @@ export function TaskDialog({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor={`${formId}-category`}>Category</Label>
+            <NativeSelect
+              id={`${formId}-category`}
+              name="category_id"
+              defaultValue={
+                existing ? (existing.category_id ?? '') : (defaultCategoryId ?? '')
+              }
+            >
+              <option value="">Uncategorised</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor={`${formId}-goal`}>Pushes forward</Label>
             <NativeSelect
               id={`${formId}-goal`}
@@ -141,6 +163,75 @@ export function TaskDialog({
 
           <DialogFooter>
             <SubmitButton idle={isEdit ? 'Save changes' : 'Add task'} />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Create or rename a board category. Controlled from outside (no trigger):
+ * the column menu opens it as a sibling so it survives the menu closing.
+ */
+export function CategoryDialog({
+  existing,
+  open,
+  onOpenChange,
+}: {
+  existing?: { id: string; name: string }
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [state, formAction] = useActionState(saveCategory, emptyFormState)
+  const formId = useId()
+  const router = useRouter()
+  const isEdit = Boolean(existing)
+
+  useEffect(() => {
+    if (!state.ok) return
+    onOpenChange(false)
+    router.refresh()
+    toast.success(isEdit ? 'Category renamed' : 'Category added')
+  }, [state, isEdit, router, onOpenChange])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? 'Rename category' : 'Add category'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <form action={formAction} className="space-y-4">
+          {existing ? (
+            <input type="hidden" name="id" value={existing.id} />
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor={`${formId}-name`}>Name</Label>
+            <Input
+              id={`${formId}-name`}
+              name="name"
+              maxLength={60}
+              placeholder="e.g. Content"
+              defaultValue={existing?.name ?? ''}
+              required
+            />
+          </div>
+
+          {state.error ? (
+            <p
+              role="alert"
+              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {state.error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <SubmitButton idle={isEdit ? 'Save' : 'Add category'} />
           </DialogFooter>
         </form>
       </DialogContent>

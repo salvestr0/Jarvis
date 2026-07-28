@@ -4,6 +4,11 @@ import { revalidatePath } from 'next/cache'
 
 import type { FormState } from '@/lib/form-state'
 import {
+  createTaskCategory,
+  deleteTaskCategory,
+  renameTaskCategory,
+} from '@/lib/queries/task-categories'
+import {
   createTask,
   deleteTask,
   setTaskDone,
@@ -37,6 +42,7 @@ function readTask(
   }
 
   const goalId = String(formData.get('goal_id') ?? '').trim()
+  const categoryId = String(formData.get('category_id') ?? '').trim()
 
   const note = String(formData.get('note') ?? '').trim()
   if (note.length > 1000) {
@@ -50,6 +56,7 @@ function readTask(
       priority,
       due_on: dueOn,
       goal_id: goalId === '' ? null : goalId,
+      category_id: categoryId === '' ? null : categoryId,
       note: note === '' ? null : note,
     },
   }
@@ -92,6 +99,52 @@ export async function toggleTask(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Could not update.',
+      ok: false,
+    }
+  }
+
+  revalidatePath('/tasks')
+  return { error: null, ok: true }
+}
+
+export async function saveCategory(
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) return { error: 'Give the category a name.', ok: false }
+  if (name.length > 60) {
+    return { error: 'Name must be under 60 characters.', ok: false }
+  }
+
+  const id = String(formData.get('id') ?? '').trim()
+
+  try {
+    if (id) await renameTaskCategory(id, name)
+    else await createTaskCategory(name)
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Something went wrong.',
+      ok: false,
+    }
+  }
+
+  revalidatePath('/tasks')
+  return { error: null, ok: true }
+}
+
+export async function removeCategory(
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  const id = String(formData.get('id') ?? '').trim()
+  if (!id) return { error: 'Missing category.', ok: false }
+
+  try {
+    await deleteTaskCategory(id)
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Could not delete.',
       ok: false,
     }
   }
