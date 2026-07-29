@@ -24,6 +24,28 @@ export function todayISO(): string {
   }).format(new Date())
 }
 
+/**
+ * The current moment as 'Wed 2026-07-29 23:45', in Singapore time — the
+ * bot's clock. Injected into every turn's system prompt so Jarvis can
+ * resolve "in 20 minutes" / "later tonight" itself instead of asking.
+ */
+export function nowSGT(): string {
+  const now = new Date()
+  const weekday = new Intl.DateTimeFormat('en-SG', {
+    timeZone: 'Asia/Singapore',
+    weekday: 'short',
+  }).format(now)
+  // h23 explicitly: hour12:false has historically meant h24 in some ICU
+  // versions, rendering midnight as "24:00".
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Singapore',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(now)
+  return `${weekday} ${todayISO()} ${time}`
+}
+
 export function isValidMonth(month: string): boolean {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return false
   const year = Number(month.slice(0, 4))

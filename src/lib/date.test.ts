@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { advanceByCadence } from './date.ts'
+import { advanceByCadence, nowSGT, todayISO } from './date.ts'
 import { monthlyEquivalentCents } from './money.ts'
+
+test("nowSGT: 'Wed 2026-07-29 23:45' shape, date agrees with todayISO", () => {
+  const now = nowSGT()
+  assert.match(now, /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2} ([01]\d|2[0-3]):[0-5]\d$/)
+  assert.equal(now.slice(4, 14), todayISO())
+})
 
 test('monthly advance keeps the billing day', () => {
   assert.equal(advanceByCadence('2026-07-15', 'monthly'), '2026-08-15')

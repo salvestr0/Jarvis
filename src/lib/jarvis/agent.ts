@@ -2,7 +2,7 @@ import 'server-only'
 
 import Anthropic from '@anthropic-ai/sdk'
 
-import { todayISO } from '@/lib/date'
+import { nowSGT } from '@/lib/date'
 import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
@@ -68,7 +68,10 @@ function buildSystemPrompt(facts: Fact[]): string {
 
   return [
     "You are Jarvis, Jayden's personal assistant, speaking with him on Telegram.",
-    `Today is ${todayISO()} (Asia/Singapore). Base currency is SGD.`,
+    `It is now ${nowSGT()} Singapore time (SGT, UTC+8) — this is your clock,`,
+    'refreshed every message. NEVER ask what time or day it is; compute',
+    'relative times ("in 20 minutes", "tomorrow morning") from this line.',
+    'Base currency is SGD.',
     '',
     'You have tools over his real finance/life tracker, his Google Calendar',
     'and Gmail (read, create events, and draft emails — you can NEVER send',
