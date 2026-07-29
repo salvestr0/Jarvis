@@ -58,5 +58,6 @@ tools, not eight — pause/next/volume fold into one `spotify_control`.
 - [x] mint script + npm script
 - [x] tool schemas + execute cases + system-prompt mention
 - [x] verify green
-- [ ] Jayden: dashboard app + mint token + Vercel env
+- [x] Jayden: dashboard app + mint token + Vercel env (done 29 Jul —
+      token verified, his desktop visible as a device, prod redeployed)
 - [ ] E2E from Telegram
