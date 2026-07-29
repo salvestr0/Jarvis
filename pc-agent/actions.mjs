@@ -149,20 +149,42 @@ async function screenshot() {
 }
 
 /**
- * Presses the hardware media key — Windows routes it to whatever media
- * session is active (Spotify, a browser tab, …), like the keyboard key.
+ * Presses the hardware media/volume key — Windows routes it to the active
+ * media session or the system mixer, like the keyboard key. Volume moves
+ * 2/100 per press, hence the repeat count.
  */
-async function mediaKey(key) {
+async function mediaKey(key, count = 1) {
   const exe = await ensureHelper('mediakey')
-  await run(exe, [key])
-  return { pressed: key }
+  await run(exe, count > 1 ? [key, String(count)] : [key])
+  return { pressed: key, count }
+}
+
+/**
+ * Topmost "Jarvis" message box on the desktop. The one builtin that accepts
+ * free text — display-only: the text travels as a single argv item (no
+ * shell to reinterpret it) and notify.cs only ever renders it.
+ */
+async function notify(payload) {
+  const text =
+    typeof payload.arg === 'string' ? payload.arg.replace(/\s+/g, ' ').trim() : ''
+  if (!text) throw new Refusal('"notify" needs arg — the message to show on screen.')
+  if (text.length > 200) {
+    throw new Refusal('"notify" message must be 200 characters or fewer.')
+  }
+  const exe = await ensureHelper('notify')
+  await launch([exe, text])
+  return { shown: text }
 }
 
 const BUILTINS = {
-  screenshot,
+  screenshot: () => screenshot(),
   'media:play_pause': () => mediaKey('play_pause'),
   'media:next': () => mediaKey('next'),
   'media:prev': () => mediaKey('prev'),
+  'media:volume_up': () => mediaKey('volume_up', 5),
+  'media:volume_down': () => mediaKey('volume_down', 5),
+  'media:mute': () => mediaKey('mute'),
+  notify: (payload) => notify(payload),
 }
 
 export async function runAction(payload, actions) {
@@ -172,7 +194,7 @@ export async function runAction(payload, actions) {
     if (!builtin) {
       throw new Refusal(`Action "${resolved.name}" is misconfigured in actions.json.`)
     }
-    return await builtin()
+    return await builtin(payload)
   }
   await launch(resolved.argv)
   return { action: resolved.name, started: true }

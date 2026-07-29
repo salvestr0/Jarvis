@@ -29,6 +29,44 @@
     "builtin": "media:prev",
     "needs_confirm": false
   },
+  "volume_up": {
+    "builtin": "media:volume_up",
+    "needs_confirm": false
+  },
+  "volume_down": {
+    "builtin": "media:volume_down",
+    "needs_confirm": false
+  },
+  "mute": {
+    "builtin": "media:mute",
+    "needs_confirm": false
+  },
+  "notify": {
+    "builtin": "notify",
+    "needs_confirm": false
+  },
+  "shutdown_pc": {
+    "argv": ["shutdown.exe", "/s", "/t", "60"],
+    "needs_confirm": true
+  },
+  "restart_pc": {
+    "argv": ["shutdown.exe", "/r", "/t", "60"],
+    "needs_confirm": true
+  },
+  "cancel_shutdown": {
+    "argv": ["shutdown.exe", "/a"],
+    "needs_confirm": false
+  },
+  "open_url": {
+    "needs_confirm": false,
+    "variants": {
+      "youtube": ["rundll32.exe", "url.dll,FileProtocolHandler", "https://www.youtube.com"],
+      "gmail": ["rundll32.exe", "url.dll,FileProtocolHandler", "https://mail.google.com"],
+      "calendar": ["rundll32.exe", "url.dll,FileProtocolHandler", "https://calendar.google.com"],
+      "github": ["rundll32.exe", "url.dll,FileProtocolHandler", "https://github.com/salvestr0/Jarvis"],
+      "jarvis": ["rundll32.exe", "url.dll,FileProtocolHandler", "https://jarvis-theta-umber-27.vercel.app"]
+    }
+  },
   "open_app": {
     "needs_confirm": false,
     "variants": {
@@ -41,6 +79,7 @@
         "Discord.exe"
       ],
       "telegram": ["C:\\Users\\User\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe"],
+      "steam": ["C:\\Program Files (x86)\\Steam\\steam.exe"],
       "notepad": ["notepad.exe"]
     }
   }
