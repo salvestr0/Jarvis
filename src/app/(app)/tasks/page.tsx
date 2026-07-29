@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { DeleteForm } from '@/components/delete-form'
 import { PageHeader } from '@/components/page-header'
 import { getGoals } from '@/lib/queries/goals'
+import { getTasksInboxLabel } from '@/lib/queries/settings'
 import { getTaskCategories } from '@/lib/queries/task-categories'
 import { getTasks, type TaskRow } from '@/lib/queries/tasks'
 
@@ -17,10 +18,12 @@ function TaskItem({
   task,
   goals,
   categories,
+  inboxLabel,
 }: {
   task: TaskRow
   goals: ReadonlyArray<{ id: string; title: string }>
   categories: ReadonlyArray<{ id: string; name: string }>
+  inboxLabel: string
 }) {
   return (
     <div className="flex items-start gap-3 px-4 py-3">
@@ -51,6 +54,7 @@ function TaskItem({
           existing={task}
           goals={goals}
           categories={categories}
+          inboxLabel={inboxLabel}
           trigger={
             <Button variant="ghost" size="sm">
               Edit
@@ -69,10 +73,11 @@ function TaskItem({
 }
 
 export default async function TasksPage() {
-  const [tasks, allGoals, categories] = await Promise.all([
+  const [tasks, allGoals, categories, inboxLabel] = await Promise.all([
     getTasks(),
     getGoals(),
     getTaskCategories(),
+    getTasksInboxLabel(),
   ])
 
   // Only active goals are offered as link targets; finished ones are history.
@@ -97,6 +102,7 @@ export default async function TasksPage() {
           <TaskDialog
             goals={goalOptions}
             categories={categoryOptions}
+            inboxLabel={inboxLabel}
             trigger={<Button>Add task</Button>}
           />
         }
@@ -107,6 +113,7 @@ export default async function TasksPage() {
           categories={categoryOptions}
           tasks={open}
           goals={goalOptions}
+          inboxLabel={inboxLabel}
         />
 
         {done.length > 0 ? (
@@ -125,6 +132,7 @@ export default async function TasksPage() {
                     task={t}
                     goals={goalOptions}
                     categories={categoryOptions}
+                    inboxLabel={inboxLabel}
                   />
                 ))}
               </CardContent>

@@ -63,3 +63,48 @@ export async function saveSettings(input: Settings, db?: Db): Promise<void> {
 
   if (error) throw new Error(`Could not save settings: ${error.message}`)
 }
+
+export const DEFAULT_INBOX_LABEL = 'Uncategorised'
+
+/**
+ * Display label of the tasks board's inbox column. Not part of Settings on
+ * purpose: the digest form upserts the whole Settings shape, and the label
+ * has its own save path below.
+ */
+export async function getTasksInboxLabel(db?: Db): Promise<string> {
+  const supabase = db?.client ?? (await createClient())
+
+  let query = supabase.from('settings').select('tasks_inbox_label')
+  // Admin client bypasses RLS, so ownership moves into the query itself.
+  if (db) query = query.eq('user_id', db.userId)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw new Error(`Could not load settings: ${error.message}`)
+
+  return (
+    (data as { tasks_inbox_label: string } | null)?.tasks_inbox_label ??
+    DEFAULT_INBOX_LABEL
+  )
+}
+
+export async function saveTasksInboxLabel(label: string): Promise<void> {
+  // No db? param on purpose: only the web board renames the inbox, so this
+  // stays browser-session-only and RLS alone decides ownership.
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not signed in.')
+
+  const { error } = await supabase.from('settings').upsert(
+    {
+      user_id: user.id,
+      tasks_inbox_label: label,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' }
+  )
+
+  if (error) throw new Error(`Could not save: ${error.message}`)
+}

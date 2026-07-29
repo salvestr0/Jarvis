@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import type { FormState } from '@/lib/form-state'
+import { saveTasksInboxLabel } from '@/lib/queries/settings'
 import {
   createTaskCategory,
   deleteTaskCategory,
@@ -122,6 +123,29 @@ export async function saveCategory(
   try {
     if (id) await renameTaskCategory(id, name)
     else await createTaskCategory(name)
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Something went wrong.',
+      ok: false,
+    }
+  }
+
+  revalidatePath('/tasks')
+  return { error: null, ok: true }
+}
+
+export async function renameInbox(
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) return { error: 'Give the column a name.', ok: false }
+  if (name.length > 60) {
+    return { error: 'Name must be under 60 characters.', ok: false }
+  }
+
+  try {
+    await saveTasksInboxLabel(name)
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Something went wrong.',

@@ -22,7 +22,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { toast } from 'sonner'
-import { PlusIcon } from 'lucide-react'
+import { PencilIcon, PlusIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -38,7 +38,7 @@ import {
 
 import { moveTask, reorderColumns, type BoardMove } from './board-actions'
 import { ColumnMenu } from './column-menu'
-import { CategoryDialog, TaskDialog } from './dialogs'
+import { CategoryDialog, InboxDialog, TaskDialog } from './dialogs'
 import {
   SortableTaskCard,
   TaskCardBody,
@@ -58,10 +58,12 @@ export function TaskBoard({
   categories,
   tasks,
   goals,
+  inboxLabel,
 }: {
   categories: ReadonlyArray<CategoryOption>
   tasks: ReadonlyArray<TaskRow>
   goals: ReadonlyArray<GoalOption>
+  inboxLabel: string
 }) {
   const serverBoard = useMemo(
     () => buildBoard(categories, tasks as TaskRow[]),
@@ -278,6 +280,7 @@ export function TaskBoard({
               column={column}
               goals={goals}
               categories={categories}
+              inboxLabel={inboxLabel}
               canMoveLeft={namedIndex > 0}
               canMoveRight={
                 namedIndex >= 0 && namedIndex < namedColumns.length - 1
@@ -295,6 +298,7 @@ export function TaskBoard({
             task={activeTask}
             goals={goals}
             categories={categories}
+            inboxLabel={inboxLabel}
             overlay
           />
         ) : null}
@@ -307,6 +311,7 @@ function BoardColumnView({
   column,
   goals,
   categories,
+  inboxLabel,
   canMoveLeft,
   canMoveRight,
   onMoveColumn,
@@ -314,6 +319,7 @@ function BoardColumnView({
   column: Column
   goals: ReadonlyArray<GoalOption>
   categories: ReadonlyArray<CategoryOption>
+  inboxLabel: string
   canMoveLeft: boolean
   canMoveRight: boolean
   onMoveColumn: (categoryId: string, direction: -1 | 1) => void
@@ -324,17 +330,29 @@ function BoardColumnView({
     id: COLUMN_ID_PREFIX + column.key,
   })
   const isUncategorised = column.categoryId === null
+  // buildBoard names the inbox column with the default label; the user's own
+  // label is display-only and lives in settings, so it's applied here.
+  const name = isUncategorised ? inboxLabel : column.name
+  const [renaming, setRenaming] = useState(false)
 
   return (
-    <section className="w-72 shrink-0" aria-label={column.name}>
+    <section className="w-72 shrink-0" aria-label={name}>
       <div className="flex items-center gap-2 px-1">
         <h2
           className={cn(
-            'truncate text-sm font-semibold',
+            'min-w-0 truncate text-sm font-semibold',
             isUncategorised && 'text-muted-foreground'
           )}
         >
-          {column.name}
+          <button
+            type="button"
+            onClick={() => setRenaming(true)}
+            aria-label={`Rename ${name}`}
+            className="group/rename inline-flex max-w-full items-center gap-1.5 align-bottom"
+          >
+            <span className="truncate">{name}</span>
+            <PencilIcon className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/rename:opacity-100 group-focus-visible/rename:opacity-100 max-sm:opacity-100" />
+          </button>
         </h2>
         <span className="text-xs text-muted-foreground">
           {column.tasks.length}
@@ -343,12 +361,13 @@ function BoardColumnView({
           <TaskDialog
             goals={goals}
             categories={categories}
+            inboxLabel={inboxLabel}
             defaultCategoryId={column.categoryId ?? undefined}
             trigger={
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label={`Add task to ${column.name}`}
+                aria-label={`Add task to ${name}`}
               >
                 <PlusIcon className="size-4" />
               </Button>
@@ -358,15 +377,33 @@ function BoardColumnView({
             <ColumnMenu
               category={{ id: column.categoryId, name: column.name }}
               taskCount={column.tasks.length}
+              inboxLabel={inboxLabel}
               canMoveLeft={canMoveLeft}
               canMoveRight={canMoveRight}
               onMove={(direction) =>
                 onMoveColumn(column.categoryId as string, direction)
               }
+              onRename={() => setRenaming(true)}
             />
           ) : null}
         </div>
       </div>
+
+      {/* Siblings of the header, not children of the menu: menu content
+          unmounts on close, which would take a nested dialog down with it. */}
+      {isUncategorised ? (
+        <InboxDialog
+          label={inboxLabel}
+          open={renaming}
+          onOpenChange={setRenaming}
+        />
+      ) : (
+        <CategoryDialog
+          existing={{ id: column.categoryId as string, name: column.name }}
+          open={renaming}
+          onOpenChange={setRenaming}
+        />
+      )}
 
       <SortableContext
         items={column.tasks.map((t) => t.id)}
@@ -385,6 +422,7 @@ function BoardColumnView({
               task={task}
               goals={goals}
               categories={categories}
+              inboxLabel={inboxLabel}
             />
           ))}
           {column.tasks.length === 0 ? (

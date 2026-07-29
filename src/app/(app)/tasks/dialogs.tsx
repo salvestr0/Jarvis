@@ -20,7 +20,7 @@ import { NativeSelect } from '@/components/field'
 import { emptyFormState } from '@/lib/form-state'
 import type { TaskRow } from '@/lib/queries/tasks'
 
-import { saveCategory, saveTask } from './actions'
+import { renameInbox, saveCategory, saveTask } from './actions'
 
 function SubmitButton({ idle }: { idle: string }) {
   const { pending } = useFormStatus()
@@ -36,12 +36,14 @@ export function TaskDialog({
   goals,
   categories,
   defaultCategoryId,
+  inboxLabel = 'Uncategorised',
   trigger,
 }: {
   existing?: TaskRow
   goals: ReadonlyArray<{ id: string; title: string }>
   categories: ReadonlyArray<{ id: string; name: string }>
   defaultCategoryId?: string
+  inboxLabel?: string
   trigger: React.ReactElement
 }) {
   const [open, setOpen] = useState(false)
@@ -114,7 +116,7 @@ export function TaskDialog({
                 existing ? (existing.category_id ?? '') : (defaultCategoryId ?? '')
               }
             >
-              <option value="">Uncategorised</option>
+              <option value="">{inboxLabel}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -232,6 +234,71 @@ export function CategoryDialog({
 
           <DialogFooter>
             <SubmitButton idle={isEdit ? 'Save' : 'Add category'} />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Rename the inbox column ("Uncategorised"). It isn't a category row — the
+ * label is a per-user setting — so it gets its own action and dialog.
+ */
+export function InboxDialog({
+  label,
+  open,
+  onOpenChange,
+}: {
+  label: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [state, formAction] = useActionState(renameInbox, emptyFormState)
+  const formId = useId()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!state.ok) return
+    onOpenChange(false)
+    router.refresh()
+    toast.success('Column renamed')
+  }, [state, router, onOpenChange])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Rename column</DialogTitle>
+        </DialogHeader>
+
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor={`${formId}-name`}>Name</Label>
+            <Input
+              id={`${formId}-name`}
+              name="name"
+              maxLength={60}
+              defaultValue={label}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              This column is the inbox — tasks created without a category
+              (including from Telegram) land here.
+            </p>
+          </div>
+
+          {state.error ? (
+            <p
+              role="alert"
+              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {state.error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <SubmitButton idle="Save" />
           </DialogFooter>
         </form>
       </DialogContent>

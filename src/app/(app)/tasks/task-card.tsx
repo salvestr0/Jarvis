@@ -43,12 +43,14 @@ export function TaskCardBody({
   task,
   goals,
   categories,
+  inboxLabel,
   grabProps,
   overlay = false,
 }: {
   task: TaskRow
   goals: ReadonlyArray<GoalOption>
   categories: ReadonlyArray<CategoryOption>
+  inboxLabel?: string
   grabProps?: HTMLAttributes<HTMLDivElement>
   overlay?: boolean
 }) {
@@ -88,6 +90,7 @@ export function TaskCardBody({
           existing={task}
           goals={goals}
           categories={categories}
+          inboxLabel={inboxLabel}
           trigger={
             <Button variant="ghost" size="sm">
               Edit
@@ -109,10 +112,12 @@ export function SortableTaskCard({
   task,
   goals,
   categories,
+  inboxLabel,
 }: {
   task: TaskRow
   goals: ReadonlyArray<GoalOption>
   categories: ReadonlyArray<CategoryOption>
+  inboxLabel?: string
 }) {
   const {
     attributes,
@@ -140,6 +145,7 @@ export function SortableTaskCard({
         task={task}
         goals={goals}
         categories={categories}
+        inboxLabel={inboxLabel}
         grabProps={
           { ...attributes, ...listeners } as HTMLAttributes<HTMLDivElement>
         }
