@@ -197,10 +197,14 @@ export async function runJarvis(userText: string): Promise<string> {
             content: await executeTool(block.name, block.input, db),
           }
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'Tool failed.'
+          // Failures otherwise vanish into the model turn — surface them in
+          // vercel logs too. Error messages never contain token values.
+          console.error(`[jarvis] tool ${block.name} failed: ${message}`)
           return {
             type: 'tool_result' as const,
             tool_use_id: block.id,
-            content: error instanceof Error ? error.message : 'Tool failed.',
+            content: message,
             is_error: true,
           }
         }
