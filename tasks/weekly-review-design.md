@@ -1,8 +1,11 @@
 # Weekly review — design
 
 **Goal:** Sunday ~20:00 SGT, Jarvis sends a Telegram message showing what
-actually got DONE this week — evidence, not vibes. Status: SPEC — awaiting
-Jayden's go.
+actually got DONE this week — evidence, not vibes. Status: **SHIPPED
+30 Jul 2026 (`e840739`), E2E-verified**: a due-now test row was claimed by
+the PC agent's own tick, Claude composed a real review (honest quiet-week
+voice, correct money numbers), the row self-rescheduled +7d; test row then
+cancelled and the production row seeded — first send Sun 2 Aug 20:00 SGT.
 
 ## Why this shape: it's a recurring reminder that composes itself
 
