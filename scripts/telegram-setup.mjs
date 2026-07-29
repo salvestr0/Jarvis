@@ -26,7 +26,15 @@ function loadEnvLocal() {
     if (!t || t.startsWith('#')) continue
     const eq = t.indexOf('=')
     if (eq === -1) continue
-    env[t.slice(0, eq).trim()] = t.slice(eq + 1).trim()
+    let value = t.slice(eq + 1).trim()
+    // Match what Next.js/Vercel do with the same file: strip surrounding
+    // quotes and inline comments. Keeping the quotes here would register the
+    // webhook secret WITH quotes while the route compares without them —
+    // every webhook 401s and Telegram just silently retries forever.
+    const quoted = value.match(/^(['"])(.*)\1$/)
+    if (quoted) value = quoted[2]
+    else value = value.replace(/\s+#.*$/, '').trim()
+    env[t.slice(0, eq).trim()] = value
   }
   return env
 }

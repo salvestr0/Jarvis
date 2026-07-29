@@ -18,7 +18,9 @@ export async function getBotDb(): Promise<Db> {
   const client = createAdminClient()
 
   if (!cachedUserId) {
-    const { data, error } = await client.auth.admin.listUsers()
+    // Default page size is 50; ask for far more than this single-user app
+    // will ever hold so the allowed user can't fall off page one.
+    const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 })
     if (error) throw new Error(`Could not list users: ${error.message}`)
 
     // isAllowedEmail fails closed: with ALLOWED_EMAIL unset, nobody matches.

@@ -250,12 +250,18 @@ export async function executeTool(
 
     case 'get_net_worth_history': {
       const daysRaw = input.days
+      // Throw on a wrong type ("90" as a string) instead of silently falling
+      // back to 30 — the model would present 30 points as "the last 90 days".
+      if (
+        daysRaw !== undefined &&
+        (typeof daysRaw !== 'number' || !Number.isFinite(daysRaw))
+      )
+        throw new Error('days must be a number.')
       const days =
-        typeof daysRaw === 'number' && Number.isFinite(daysRaw)
-          ? Math.min(365, Math.max(1, Math.round(daysRaw)))
-          : 30
+        daysRaw === undefined ? 30 : Math.min(365, Math.max(1, Math.round(daysRaw)))
       const points = await getNetWorthHistory(days, db)
       return JSON.stringify({
+        days,
         oldest_first: true,
         points: points.map((p) => ({
           as_of: p.asOf,
@@ -667,7 +673,11 @@ export async function executeTool(
     }
 
     case 'set_task_done': {
-      const done = input.done === undefined ? true : input.done === true
+      // Throw on a non-boolean ("true" as a string would coerce to false and
+      // REOPEN the task) so the model self-corrects like other validators.
+      if (input.done !== undefined && typeof input.done !== 'boolean')
+        throw new Error('done must be a boolean.')
+      const done = input.done === undefined ? true : input.done
       await setTaskDone(requiredString(input, 'task_id'), done, db)
       return JSON.stringify({ updated: { done } })
     }

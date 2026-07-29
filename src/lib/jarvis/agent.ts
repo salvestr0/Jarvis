@@ -24,6 +24,12 @@ const MAX_TOKENS = 8192
 // A question needing more than 8 round trips is beyond what a chat bot
 // should silently burn tokens on.
 const MAX_ITERATIONS = 8
+// Stop starting new rounds once this much wall clock has passed. The route's
+// maxDuration is 300s; 8 iterations × the SDK's 120s timeout could blow past
+// it and the function would be killed mid-after() — no reply, no apology, and
+// no Telegram redelivery. 150s + one worst-case round (120s API + tools)
+// still lands inside the budget with room to send the reply.
+const DEADLINE_MS = 150_000
 
 /**
  * Web search runs on Anthropic's servers, not here — Claude issues the query,
@@ -134,6 +140,7 @@ function textOf(response: Anthropic.Message): string {
 }
 
 export async function runJarvis(userText: string): Promise<string> {
+  const receivedAt = Date.now()
   const db = await getBotDb()
   const [history, facts] = await Promise.all([loadHistory(db), getFacts(db)])
 
@@ -145,6 +152,13 @@ export async function runJarvis(userText: string): Promise<string> {
   let finalText = 'Sorry — that took too many steps. Try asking more directly.'
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    // Checked before the API call, so tripping it is side-effect-free and a
+    // re-ask is safe — same reasoning as the final-round bail below.
+    if (Date.now() - receivedAt > DEADLINE_MS) {
+      finalText = 'Sorry — that was taking too long. Try asking more directly.'
+      break
+    }
+
     const response = await getClient().messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
@@ -167,6 +181,16 @@ export async function runJarvis(userText: string): Promise<string> {
     if (response.stop_reason === 'pause_turn') {
       messages.push({ role: 'assistant', content: response.content })
       continue
+    }
+
+    // Truncated at MAX_TOKENS: any trailing tool_use is unusable and silently
+    // dropping it would present a half-answer as complete. Say so instead.
+    if (response.stop_reason === 'max_tokens') {
+      const partial = textOf(response)
+      finalText = partial
+        ? `${partial}\n\n(That reply hit my length limit — the tail may be missing.)`
+        : 'That answer overflowed my reply limit — try asking for a smaller piece of it.'
+      break
     }
 
     const toolUses = response.content.filter(
@@ -214,7 +238,7 @@ export async function runJarvis(userText: string): Promise<string> {
   }
 
   try {
-    await saveTurn(db, userText, finalText)
+    await saveTurn(db, userText, finalText, receivedAt)
   } catch (error) {
     // Losing one exchange of memory is not worth losing the reply.
     console.error(

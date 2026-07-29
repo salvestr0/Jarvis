@@ -37,6 +37,19 @@ test('pathological text with no newlines hard-splits at the limit', () => {
   assert.equal(chunks.join(''), text)
 })
 
+test('hard cut never splits a surrogate pair', () => {
+  // 💰 is two UTF-16 units; with limit 5, a naive cut at 5 would slice it.
+  const text = 'aaaa💰bbbb'
+  const chunks = chunkTelegramMessage(text, 5)
+
+  for (const chunk of chunks) {
+    assert.ok(chunk.length <= 5)
+    // No chunk may hold half an emoji — Telegram 400s lone surrogates.
+    assert.ok(chunk.isWellFormed(), `lone surrogate in ${JSON.stringify(chunk)}`)
+  }
+  assert.equal(chunks.join(''), text)
+})
+
 test('never returns an empty chunk', () => {
   const text = 'a'.repeat(50) + '\n'.repeat(5) + 'b'.repeat(50)
   for (const chunk of chunkTelegramMessage(text, 55)) {

@@ -18,37 +18,57 @@ function botUrl(method: string): string {
   return `https://api.telegram.org/bot${token}/${method}`
 }
 
+// Telegram rate-limits ~1 message/second per chat, so a multi-chunk reply
+// sent back-to-back can 429 mid-way and lose its tail. Honour retry_after a
+// couple of times before giving up; anything longer would eat into the
+// function's remaining after() budget.
+const MAX_RATE_LIMIT_RETRIES = 2
+const MAX_RETRY_AFTER_S = 10
+
 async function callTelegram(method: string, body: unknown): Promise<void> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-  try {
-    const res = await fetch(botUrl(method), {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    })
+    try {
+      const res = await fetch(botUrl(method), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      })
 
-    // Telegram reports failures both ways: HTTP status and an `ok` field.
-    const payload = (await res.json().catch(() => null)) as {
-      ok?: boolean
-      description?: string
-    } | null
+      // Telegram reports failures both ways: HTTP status and an `ok` field.
+      const payload = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        description?: string
+        parameters?: { retry_after?: number }
+      } | null
 
-    if (!res.ok || payload?.ok === false) {
-      throw new Error(
-        `Telegram ${method} failed (HTTP ${res.status}): ${payload?.description ?? 'no description'}`
-      )
+      if (res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
+        const waitS = Math.min(
+          payload?.parameters?.retry_after ?? 1,
+          MAX_RETRY_AFTER_S
+        )
+        await new Promise((r) => setTimeout(r, waitS * 1000))
+        continue
+      }
+
+      if (!res.ok || payload?.ok === false) {
+        throw new Error(
+          `Telegram ${method} failed (HTTP ${res.status}): ${payload?.description ?? 'no description'}`
+        )
+      }
+      return
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Telegram ${method} timed out after ${TIMEOUT_MS / 1000}s`)
+      }
+      throw error
+    } finally {
+      clearTimeout(timer)
     }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Telegram ${method} timed out after ${TIMEOUT_MS / 1000}s`)
-    }
-    throw error
-  } finally {
-    clearTimeout(timer)
   }
 }
 

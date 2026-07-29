@@ -52,11 +52,15 @@ export async function saveAssistantNote(db: Db, text: string): Promise<void> {
 export async function saveTurn(
   db: Db,
   userText: string,
-  assistantText: string
+  assistantText: string,
+  sentAtMs?: number
 ): Promise<void> {
   // Explicit timestamps 1ms apart: both rows inserted in one statement would
   // share now(), making "user before assistant" ordering a coin flip on read.
-  const at = Date.now()
+  // Callers pass the moment the user message ARRIVED (sentAtMs): saves happen
+  // at completion time, so two concurrent turns would otherwise replay in
+  // finish order, not the order Jayden sent them.
+  const at = sentAtMs ?? Date.now()
 
   const { error } = await db.client.from('chat_messages').insert([
     {
