@@ -17,6 +17,18 @@
     ],
     "needs_confirm": false
   },
+  "play_pause": {
+    "builtin": "media:play_pause",
+    "needs_confirm": false
+  },
+  "next_track": {
+    "builtin": "media:next",
+    "needs_confirm": false
+  },
+  "prev_track": {
+    "builtin": "media:prev",
+    "needs_confirm": false
+  },
   "open_app": {
     "needs_confirm": false,
     "variants": {

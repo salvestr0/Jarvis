@@ -89,13 +89,11 @@ function launch(argv) {
 }
 
 /**
- * Capture → scaled JPEG → base64 in the result. The cloud side relays it
- * to Telegram and strips the bytes before the model sees anything.
- *
- * The capture itself is screenshot.cs compiled on first use with the .NET
- * Framework csc.exe Windows ships — a PowerShell version trips Defender's
- * AMSI ("malicious content") because script screen-capture is a known bad
- * pattern; a plain compiled helper is the boring, supported path.
+ * Builtins that need more than launching an app are small C# helpers,
+ * compiled on first use with the .NET Framework csc.exe Windows ships — a
+ * PowerShell version of the screenshot trips Defender's AMSI ("malicious
+ * content") because script screen-capture is a known bad pattern; a plain
+ * compiled helper is the boring, supported path.
  */
 const CSC = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
 
@@ -107,9 +105,10 @@ function run(cmd, args) {
   })
 }
 
-async function screenshot() {
-  const exe = join(here, 'screenshot.exe')
-  const source = join(here, 'screenshot.cs')
+/** Compile <name>.cs beside this file into <name>.exe when missing or stale. */
+async function ensureHelper(name, refs = []) {
+  const exe = join(here, `${name}.exe`)
+  const source = join(here, `${name}.cs`)
   const [exeStat, sourceStat] = await Promise.all([
     fs.stat(exe).catch(() => null),
     fs.stat(source),
@@ -118,12 +117,23 @@ async function screenshot() {
     await run(CSC, [
       '/nologo',
       '/target:winexe',
-      '/r:System.Drawing.dll',
-      '/r:System.Windows.Forms.dll',
+      ...refs.map((r) => `/r:${r}`),
       `/out:${exe}`,
       source,
     ])
   }
+  return exe
+}
+
+/**
+ * Capture → scaled JPEG → base64 in the result. The cloud side relays it
+ * to Telegram and strips the bytes before the model sees anything.
+ */
+async function screenshot() {
+  const exe = await ensureHelper('screenshot', [
+    'System.Drawing.dll',
+    'System.Windows.Forms.dll',
+  ])
 
   const out = join(tmpdir(), `jarvis-shot-${Date.now()}.jpg`)
   await run(exe, [out])
@@ -138,9 +148,32 @@ async function screenshot() {
   }
 }
 
+/**
+ * Presses the hardware media key — Windows routes it to whatever media
+ * session is active (Spotify, a browser tab, …), like the keyboard key.
+ */
+async function mediaKey(key) {
+  const exe = await ensureHelper('mediakey')
+  await run(exe, [key])
+  return { pressed: key }
+}
+
+const BUILTINS = {
+  screenshot,
+  'media:play_pause': () => mediaKey('play_pause'),
+  'media:next': () => mediaKey('next'),
+  'media:prev': () => mediaKey('prev'),
+}
+
 export async function runAction(payload, actions) {
   const resolved = resolveAction(actions, payload)
-  if (resolved.builtin === 'screenshot') return await screenshot()
+  if (resolved.builtin) {
+    const builtin = BUILTINS[resolved.builtin]
+    if (!builtin) {
+      throw new Refusal(`Action "${resolved.name}" is misconfigured in actions.json.`)
+    }
+    return await builtin()
+  }
   await launch(resolved.argv)
   return { action: resolved.name, started: true }
 }
