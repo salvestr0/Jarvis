@@ -9,6 +9,8 @@ export type Reminder = {
   body: string
   due_at: string
   repeat: ReminderRepeat
+  /** 'message' sends the body; 'weekly_review' composes the week's report. */
+  kind: 'message' | 'weekly_review'
 }
 
 export async function createReminder(
@@ -41,7 +43,7 @@ export async function getPendingReminders(db?: Db): Promise<Reminder[]> {
   const supabase = db?.client ?? (await createClient())
   let query = supabase
     .from('reminders')
-    .select('id, body, due_at, repeat')
+    .select('id, body, due_at, repeat, kind')
     .eq('status', 'pending')
   if (db) query = query.eq('user_id', db.userId)
   const { data, error } = await query.order('due_at', { ascending: true })
@@ -81,7 +83,7 @@ export async function claimDueReminders(db: Db): Promise<Reminder[]> {
     .eq('user_id', db.userId)
     .eq('status', 'pending')
     .lte('due_at', now)
-    .select('id, body, due_at, repeat')
+    .select('id, body, due_at, repeat, kind')
 
   if (error) throw new Error(`Could not claim reminders: ${error.message}`)
   return (data ?? []) as Reminder[]

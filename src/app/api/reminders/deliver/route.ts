@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { runWeeklyReview } from '@/lib/cron/review'
 import { getBotDb } from '@/lib/jarvis/db'
 import { saveAssistantNote } from '@/lib/jarvis/history'
 import {
@@ -9,6 +10,7 @@ import {
 } from '@/lib/queries/reminders'
 import { nextDueAt, reminderMessage } from '@/lib/reminders'
 import { sendMessage } from '@/lib/telegram/api'
+import { chunkTelegramMessage } from '@/lib/telegram/format'
 
 /**
  * Reminder delivery — deliberately NOT a Vercel cron (both Hobby slots are
@@ -24,7 +26,9 @@ import { sendMessage } from '@/lib/telegram/api'
  */
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Weekly-review rows include one Claude compose call — same headroom
+// reasoning as the digest route.
+export const maxDuration = 120
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -55,8 +59,20 @@ export async function GET(request: NextRequest) {
       const now = new Date()
       const dueAt = new Date(reminder.due_at)
       try {
-        const text = reminderMessage(reminder.body, dueAt, now)
-        await sendMessage(chatId, text)
+        let text: string
+        if (reminder.kind === 'weekly_review') {
+          // Composes itself; the row's body is just its list_reminders label.
+          // The compose has its own model→fallback safety net, so this only
+          // throws on data-layer failures — which revert the claim below.
+          const review = await runWeeklyReview(db, now)
+          text = review.text
+          for (const chunk of chunkTelegramMessage(text)) {
+            await sendMessage(chatId, chunk)
+          }
+        } else {
+          text = reminderMessage(reminder.body, dueAt, now)
+          await sendMessage(chatId, text)
+        }
         sent += 1
 
         // Into chat history like the digest, so "what was that about?" and

@@ -75,10 +75,13 @@ if (remindersUrl && !cronSecret) {
 }
 
 function pingReminders() {
-  // Fire-and-forget: a slow or failed tick must never stall the job loop.
+  // Fire-and-forget: a slow or failed tick must never stall the job loop
+  // (this is never awaited). 90s timeout because a weekly-review tick
+  // composes a report server-side before responding — a 15s abort here
+  // would log a spurious failure every Sunday while delivery succeeded.
   fetch(remindersUrl, {
     headers: { authorization: `Bearer ${cronSecret}` },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(90_000),
   })
     .then(async (res) => {
       if (!res.ok) {
