@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Compiled on the PC by pc-agent (from screenshot.cs)
 pc-agent/*.exe
+
+# Written by pc-agent/start-agent.cmd (the logon supervisor)
+pc-agent/agent.log*
