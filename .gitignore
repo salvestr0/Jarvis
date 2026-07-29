@@ -50,3 +50,6 @@ pc-agent/*.exe
 
 # Written by pc-agent/start-agent.cmd (the logon supervisor)
 pc-agent/agent.log*
+
+# Daily data exports (scripts/db-export.mjs) — synced offsite via OneDrive
+backups/

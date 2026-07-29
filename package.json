@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:migrate": "node scripts/migrate.mjs",
     "db:check": "node scripts/db-check.mjs",
+    "db:export": "node scripts/db-export.mjs",
     "test": "node --test \"src/**/*.test.ts\" \"pc-agent/**/*.test.mjs\"",
     "check:actions": "node scripts/check-actions.mjs",
     "audit": "node scripts/security-audit.mjs",
