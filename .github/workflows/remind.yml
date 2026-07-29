@@ -1,0 +1,29 @@
+# Reminder tick — the away-from-PC tier (tasks/reminders-design.md).
+#
+# The PC agent pings the deliver endpoint every minute while the PC is
+# awake; this covers the rest. GitHub schedule granularity is 5 minutes and
+# can lag under load — fine for a fallback, and late deliveries label
+# themselves with the original due time.
+#
+# Needs the CRON_SECRET repo secret (Settings → Secrets → Actions). The
+# endpoint is idempotent, so overlapping with the PC agent is harmless.
+
+name: reminders-tick
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping the deliver endpoint
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://jarvis-theta-umber-27.vercel.app/api/reminders/deliver")
+          echo "deliver endpoint returned HTTP $code"
+          test "$code" = "200"

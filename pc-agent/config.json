@@ -5,5 +5,7 @@
     "Downloads": "C:\\Users\\User\\Downloads"
   },
   "pollMs": 2500,
-  "heartbeatMs": 30000
+  "heartbeatMs": 30000,
+  "remindersPingMs": 60000,
+  "remindersUrl": "https://jarvis-theta-umber-27.vercel.app/api/reminders/deliver"
 }

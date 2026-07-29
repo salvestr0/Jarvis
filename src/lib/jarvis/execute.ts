@@ -16,8 +16,14 @@ import {
 import { sendPhoto } from '@/lib/telegram/api'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
+import { formatSgt, parseSgt, validateDueAt } from '@/lib/reminders'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
 import { createFact, deleteFact } from '@/lib/queries/facts'
+import {
+  cancelReminder,
+  createReminder,
+  getPendingReminders,
+} from '@/lib/queries/reminders'
 import {
   createJob,
   createWin,
@@ -610,6 +616,43 @@ export async function executeTool(
     case 'forget': {
       await deleteFact(requiredString(input, 'fact_id'), db)
       return JSON.stringify({ forgotten: true })
+    }
+
+    // --- reminders -----------------------------------------------------------
+
+    case 'create_reminder': {
+      const body = requiredString(input, 'body')
+      if (body.length > 500) throw new Error('body is too long (500 max).')
+      const repeatRaw = optionalString(input, 'repeat')
+      const repeat = repeatRaw
+        ? oneOf(repeatRaw, ['none', 'daily', 'weekly'] as const, 'repeat')
+        : 'none'
+      const dueAt = parseSgt(requiredString(input, 'due_at'))
+      if (!dueAt)
+        throw new Error('due_at must be "YYYY-MM-DD HH:MM" (24h, Singapore time).')
+      const invalid = validateDueAt(dueAt, new Date())
+      if (invalid) throw new Error(invalid)
+      await createReminder(body, dueAt, repeat, db)
+      return JSON.stringify({
+        created: { body, due_at_sgt: formatSgt(dueAt), repeat },
+      })
+    }
+
+    case 'list_reminders': {
+      const reminders = await getPendingReminders(db)
+      return JSON.stringify({
+        reminders: reminders.map((r) => ({
+          id: r.id,
+          body: r.body,
+          due_at_sgt: formatSgt(r.due_at),
+          repeat: r.repeat,
+        })),
+      })
+    }
+
+    case 'cancel_reminder': {
+      await cancelReminder(requiredString(input, 'reminder_id'), db)
+      return JSON.stringify({ cancelled: true })
     }
 
     // --- writes ------------------------------------------------------------

@@ -13,7 +13,8 @@ import { getSupabasePublishableKey, getSupabaseUrl, isAllowedEmail } from './env
  * Being listed here does NOT make them public: both routes reject requests
  * without the correct secret, and refuse to run at all when unconfigured.
  */
-const PUBLIC_PATHS = ['/login', '/auth', '/api/cron', '/api/telegram']
+// `/api/reminders` likewise: the deliver endpoint requires Bearer CRON_SECRET.
+const PUBLIC_PATHS = ['/login', '/auth', '/api/cron', '/api/telegram', '/api/reminders']
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

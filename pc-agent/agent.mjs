@@ -64,6 +64,37 @@ for (const [alias, dir] of Object.entries(config.roots)) {
   }
 }
 
+// Reminder ticker: while this PC is awake, we're the minute-precision tier
+// (GitHub Actions is the every-5-min fallback). Just an HTTPS GET to the
+// deliver endpoint — this process deliberately gets no reminders table
+// access, keeping the pc_agent role boxed to its two tables.
+const remindersUrl = config.remindersUrl
+const cronSecret = env.CRON_SECRET
+if (remindersUrl && !cronSecret) {
+  console.log('CRON_SECRET not in .env.local — reminder ticks disabled.')
+}
+
+function pingReminders() {
+  // Fire-and-forget: a slow or failed tick must never stall the job loop.
+  fetch(remindersUrl, {
+    headers: { authorization: `Bearer ${cronSecret}` },
+    signal: AbortSignal.timeout(15_000),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        console.error(`[${new Date().toISOString()}] reminder tick HTTP ${res.status}`)
+        return
+      }
+      const report = await res.json().catch(() => null)
+      if (report?.sent > 0) {
+        console.log(`[${new Date().toISOString()}] reminders delivered: ${report.sent}`)
+      }
+    })
+    .catch((error) => {
+      console.error(`[${new Date().toISOString()}] reminder tick failed: ${error.message}`)
+    })
+}
+
 // Tier 2: the named-action allowlist, validated up front so a broken edit
 // stops the agent instead of failing job by job.
 const actions = validateActions(
@@ -145,8 +176,18 @@ async function main() {
   console.log(`${VERSION} starting. Roots: ${Object.values(config.roots).join(', ')}`)
   console.log(`Actions: ${Object.keys(actions).join(', ')}`)
   let lastHeartbeat = 0
+  let lastRemindersPing = 0
 
   while (!stopping) {
+    if (
+      remindersUrl &&
+      cronSecret &&
+      Date.now() - lastRemindersPing > (config.remindersPingMs ?? 60_000)
+    ) {
+      lastRemindersPing = Date.now()
+      pingReminders()
+    }
+
     try {
       client ??= await connect()
 

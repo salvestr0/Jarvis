@@ -373,6 +373,56 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
 
+  // --- reminders -------------------------------------------------------------
+  {
+    name: 'create_reminder',
+    description:
+      'Call this when the user asks to be reminded of something at a time ("remind me Thursday 3pm to call the bank", "remind me in 20 minutes"). Delivered to this chat, usually within a minute of the due time. This is an ADD: do it immediately, then confirm in one line with the exact date and time. Compute relative times ("in 20 minutes", "tomorrow morning") into a concrete Singapore date and time yourself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        body: {
+          type: 'string',
+          description:
+            'What the reminder should say, phrased to him ("Call the bank about the fixed deposit"). Max 500 chars.',
+        },
+        due_at: {
+          type: 'string',
+          description:
+            'When to fire, "YYYY-MM-DD HH:MM" in 24h Singapore time. Must be in the future.',
+        },
+        repeat: {
+          type: 'string',
+          enum: ['none', 'daily', 'weekly'],
+          description:
+            'Repeat schedule. daily/weekly re-fires at the same time each day/week. Default none (one-shot).',
+        },
+      },
+      required: ['body', 'due_at'],
+    },
+  },
+  {
+    name: 'list_reminders',
+    description:
+      'Call this when the user asks what reminders are set, or before cancelling one to get its id. Returns pending reminders, soonest first, with Singapore times.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'cancel_reminder',
+    description:
+      'Call this when the user asks to cancel a reminder. Cancelling is a reversible status change, so if he named the reminder precisely ("cancel the 3pm bank reminder"), cancel it right away and confirm; only ask first when it is ambiguous which one he means. Use list_reminders to find the id.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        reminder_id: {
+          type: 'string',
+          description: 'The id of the reminder to cancel, from list_reminders',
+        },
+      },
+      required: ['reminder_id'],
+    },
+  },
+
   // --- writes --------------------------------------------------------------
   {
     name: 'log_transaction',
