@@ -1,8 +1,11 @@
 # Reminders — design
 
 **Goal:** "Remind me Thursday 3pm to call the bank" → a Telegram message at
-Thursday 3pm. One-shot and simple recurring (daily/weekly). Status: SPEC —
-awaiting Jayden's go.
+Thursday 3pm. One-shot and simple recurring (daily/weekly). Status: **SHIPPED
+29 Jul 2026 (`3881bb5`)** — E2E verified both ways: manual endpoint tick sent
+a due reminder to Telegram (+ chat history + atomic claim confirmed by a
+no-op second tick), and the restarted PC agent's own 60s tick delivered a
+second one autonomously. CRON_SECRET set in GitHub Actions secrets.
 
 ## Why this shape
 
