@@ -4,6 +4,15 @@ import { currentMonth, isValidMonth, todayISO } from '@/lib/date'
 import { createEvent, listEvents } from '@/lib/google/calendar'
 import { createDraft, getMessage, searchMessages } from '@/lib/google/gmail'
 import { createPcJob, getPcJob, isPcOnline, waitForPcJob } from '@/lib/queries/pc'
+import {
+  control as spotifyControl,
+  nowPlaying as spotifyNowPlaying,
+  play as spotifyPlay,
+  queue as spotifyQueue,
+  search as spotifySearch,
+  setVolume as spotifySetVolume,
+  type PlayableKind,
+} from '@/lib/spotify/player'
 import { sendPhoto } from '@/lib/telegram/api'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
@@ -497,6 +506,52 @@ export async function executeTool(
         draft_id: draft.id,
         note: 'Draft only — it will not send until Jayden sends it from Gmail.',
       })
+    }
+
+    // --- Spotify --------------------------------------------------------------
+
+    case 'spotify_play': {
+      const query = optionalString(input, 'query')
+      if (query === null) {
+        await spotifyControl('resume')
+        return JSON.stringify({ resumed: true })
+      }
+      const kindRaw = optionalString(input, 'kind') ?? 'track'
+      const kinds: PlayableKind[] = ['track', 'album', 'playlist', 'artist']
+      const kind = (kinds as string[]).includes(kindRaw)
+        ? (kindRaw as PlayableKind)
+        : 'track'
+      const found = await spotifySearch(query, kind)
+      if (!found) {
+        return JSON.stringify({ found: false, note: `No ${kind} matched "${query}".` })
+      }
+      if (input.queue === true && found.kind === 'track') {
+        await spotifyQueue(found)
+        return JSON.stringify({ queued: `${found.name}${found.by ? ` — ${found.by}` : ''}` })
+      }
+      await spotifyPlay(found)
+      return JSON.stringify({
+        playing: `${found.name}${found.by ? ` — ${found.by}` : ''}`,
+        kind: found.kind,
+      })
+    }
+
+    case 'spotify_control': {
+      const command = requiredString(input, 'command')
+      if (command === 'volume') {
+        const percent = clampedInt(input.volume_percent, 50, 0, 100)
+        await spotifySetVolume(percent)
+        return JSON.stringify({ volume_percent: percent })
+      }
+      if (!['pause', 'resume', 'next', 'previous'].includes(command)) {
+        throw new Error('command must be pause, resume, next, previous, or volume.')
+      }
+      await spotifyControl(command as 'pause' | 'resume' | 'next' | 'previous')
+      return JSON.stringify({ done: command })
+    }
+
+    case 'spotify_now_playing': {
+      return JSON.stringify(await spotifyNowPlaying())
     }
 
     // --- PC access, tier 1 (read-only) --------------------------------------

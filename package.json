@@ -14,6 +14,7 @@
     "audit": "node scripts/security-audit.mjs",
     "telegram:setup": "node scripts/telegram-setup.mjs",
     "google:auth": "node scripts/google-auth.mjs",
+    "spotify:auth": "node scripts/spotify-auth.mjs",
     "pc:setup": "node scripts/pc-agent-setup.mjs",
     "pc:agent": "node pc-agent/agent.mjs",
     "verify": "npm run check:actions && tsc --noEmit && npm test && npm run build"

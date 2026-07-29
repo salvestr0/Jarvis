@@ -202,6 +202,55 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
 
+  // --- Spotify (playback control on any of his devices) ---------------------
+  {
+    name: 'spotify_play',
+    description:
+      'Call this when the user asks to play specific music: a song, artist, album, or playlist ("play my Deep Focus playlist", "play some Drake"). Searches and starts playback on his active Spotify device — or the first available one. For playlists his own are checked before the catalog. With queue: true it queues instead of interrupting. No query = resume whatever was paused. If it reports no device, open Spotify via pc_run_action (open_app spotify), wait a moment, retry once. For a bare "play/pause music" toggle on his PC, pc_run_action play_pause also works without Spotify being connected.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What to search for, e.g. "Deep Focus" or "One Dance Drake". Omit to resume.',
+        },
+        kind: {
+          type: 'string',
+          description: 'What the query names: track (default), album, playlist, or artist',
+        },
+        queue: {
+          type: 'boolean',
+          description: 'true = add the track to the queue instead of playing it now (tracks only)',
+        },
+      },
+    },
+  },
+  {
+    name: 'spotify_control',
+    description:
+      'Call this when the user asks to pause, resume, or skip Spotify playback, or set its volume: pause, resume, next, previous, or volume (with volume_percent 0-100). Volume here sets the Spotify player exactly; pc_run_action volume_up/down changes the whole PC instead.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'One of: pause, resume, next, previous, volume',
+        },
+        volume_percent: {
+          type: 'integer',
+          description: 'For command volume: target 0-100',
+        },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'spotify_now_playing',
+    description:
+      "Call this when the user asks what's playing, what song this is, or before changing playback when context helps. Returns track, artist, device, and volume.",
+    input_schema: { type: 'object', properties: {} },
+  },
+
   // --- PC access, tier 1 (read-only) ---------------------------------------
   {
     name: 'pc_list_dir',
