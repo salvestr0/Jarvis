@@ -9,8 +9,11 @@ export type Reminder = {
   body: string
   due_at: string
   repeat: ReminderRepeat
-  /** 'message' sends the body; 'weekly_review' composes the week's report. */
-  kind: 'message' | 'weekly_review'
+  /**
+   * 'message' sends the body; 'weekly_review' composes the week's report;
+   * 'content_nudge' composes the evening content question.
+   */
+  kind: 'message' | 'weekly_review' | 'content_nudge'
 }
 
 export async function createReminder(

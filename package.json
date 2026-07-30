@@ -14,6 +14,7 @@
     "check:actions": "node scripts/check-actions.mjs",
     "audit": "node scripts/security-audit.mjs",
     "review:enable": "node scripts/enable-weekly-review.mjs",
+    "nudge:enable": "node scripts/enable-content-nudge.mjs",
     "telegram:setup": "node scripts/telegram-setup.mjs",
     "google:auth": "node scripts/google-auth.mjs",
     "spotify:auth": "node scripts/spotify-auth.mjs",

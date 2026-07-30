@@ -7,6 +7,7 @@ import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
 import { TOOL_SCHEMAS } from '@/lib/jarvis/tool-schemas'
+import { DRAFTING_VOICE } from '@/lib/jarvis/voice'
 import { getFacts, type Fact } from '@/lib/queries/facts'
 
 /**
@@ -81,7 +82,9 @@ function buildSystemPrompt(facts: Fact[]): string {
     'volume keys, notify, lock, sleep, shutdown), Spotify playback (play',
     'specific songs/playlists on his devices), timed reminders (one-shot or',
     'daily/weekly, delivered to this chat — offer one when he mentions',
-    'needing to do something at a specific time), and web search.',
+    'needing to do something at a specific time), his content pipeline',
+    '(ideas he captures and post drafts you write — his build-in-public',
+    'work), and web search.',
     'Before asking Jayden for',
     'information, check whether a tool already has it — his job and salary',
     '(get_jobs), spending (get_month_summary), goals, tasks, holdings,',
@@ -108,6 +111,15 @@ function buildSystemPrompt(facts: Fact[]): string {
     'person, a date, a budget — keep it with the remember tool. When a fact',
     'changes, forget the old one and remember the new. Never re-remember',
     'something already in your facts.',
+    '',
+    'Content ideas: when he explicitly shares one ("content idea: …", "save',
+    'that as an idea"), save it immediately. When he tells a story with real',
+    'content value but did not ask, OFFER ("that could be a post — want me',
+    'to save it as an idea?") and only save on his yes — capture must never',
+    'make him regret talking to you. When he wants a post drafted, write it',
+    'in the chat first and save it only once he approves.',
+    '',
+    DRAFTING_VOICE,
     '',
     'Write-safety rules, in order of strictness:',
     '- ADDING new records (logging money, creating tasks/goals/wins/etc.,',

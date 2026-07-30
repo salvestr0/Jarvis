@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { runContentNudge } from '@/lib/cron/nudge'
 import { runWeeklyReview } from '@/lib/cron/review'
 import { getBotDb } from '@/lib/jarvis/db'
 import { saveAssistantNote } from '@/lib/jarvis/history'
@@ -26,8 +27,8 @@ import { chunkTelegramMessage } from '@/lib/telegram/format'
  */
 
 export const dynamic = 'force-dynamic'
-// Weekly-review rows include one Claude compose call — same headroom
-// reasoning as the digest route.
+// Weekly-review and content-nudge rows include one Claude compose call —
+// same headroom reasoning as the digest route.
 export const maxDuration = 120
 
 export async function GET(request: NextRequest) {
@@ -60,12 +61,15 @@ export async function GET(request: NextRequest) {
       const dueAt = new Date(reminder.due_at)
       try {
         let text: string
-        if (reminder.kind === 'weekly_review') {
+        if (reminder.kind === 'weekly_review' || reminder.kind === 'content_nudge') {
           // Composes itself; the row's body is just its list_reminders label.
           // The compose has its own model→fallback safety net, so this only
           // throws on data-layer failures — which revert the claim below.
-          const review = await runWeeklyReview(db, now)
-          text = review.text
+          const composed =
+            reminder.kind === 'weekly_review'
+              ? await runWeeklyReview(db, now)
+              : await runContentNudge(db, now)
+          text = composed.text
           for (const chunk of chunkTelegramMessage(text)) {
             await sendMessage(chatId, chunk)
           }

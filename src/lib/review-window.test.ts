@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { addDaysIso, inDateRange, weekWindowSgt } from './review-window.ts'
+import { addDaysIso, dayWindowSgt, inDateRange, weekWindowSgt } from './review-window.ts'
 
 test('weekWindowSgt: a Sunday-evening send covers Monday of that week', () => {
   // Sunday 2 Aug 2026 20:00 SGT = 12:00 UTC.
@@ -42,6 +42,21 @@ test('weekWindowSgt: single month when both weeks fit inside it', () => {
   // Fri 24 Jul 2026 SGT — weeks of 20 Jul and 13 Jul, both in July.
   const w = weekWindowSgt(new Date('2026-07-24T04:00:00Z'))
   assert.deepEqual(w.months, ['2026-07'])
+})
+
+test('dayWindowSgt: a 21:30 SGT nudge covers that SGT day', () => {
+  // Friday 31 Jul 2026 21:30 SGT = 13:30 UTC.
+  const d = dayWindowSgt(new Date('2026-07-31T13:30:00Z'))
+  assert.equal(d.start, '2026-07-31')
+  assert.equal(d.endExclusive, '2026-08-01')
+  assert.equal(d.startInstant, '2026-07-30T16:00:00.000Z') // Fri 00:00 SGT
+})
+
+test('dayWindowSgt: late SGT evening is still the same SGT day after UTC midnight rolls it', () => {
+  // 1 Aug 2026 00:30 SGT = 31 Jul 16:30 UTC — SGT is already on 1 Aug.
+  const d = dayWindowSgt(new Date('2026-07-31T16:30:00Z'))
+  assert.equal(d.start, '2026-08-01')
+  assert.equal(d.endExclusive, '2026-08-02')
 })
 
 test('inDateRange: inclusive start, exclusive end', () => {

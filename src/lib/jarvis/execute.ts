@@ -18,6 +18,14 @@ import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { formatSgt, parseSgt, validateDueAt } from '@/lib/reminders'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
+import {
+  createContentDraft,
+  createContentIdea,
+  getContentDrafts,
+  getContentIdeas,
+  setContentDraftStatus,
+  setContentIdeaStatus,
+} from '@/lib/queries/content'
 import { createFact, deleteFact } from '@/lib/queries/facts'
 import {
   cancelReminder,
@@ -653,6 +661,77 @@ export async function executeTool(
     case 'cancel_reminder': {
       await cancelReminder(requiredString(input, 'reminder_id'), db)
       return JSON.stringify({ cancelled: true })
+    }
+
+    // --- content loop --------------------------------------------------------
+
+    case 'save_content_idea': {
+      const text = requiredString(input, 'text')
+      if (text.length > 2000) throw new Error('text is too long (2000 max).')
+      await createContentIdea(text, db)
+      return JSON.stringify({ saved: { idea: text } })
+    }
+
+    case 'list_content_ideas': {
+      const ideas = await getContentIdeas(db)
+      return JSON.stringify({
+        ideas: ideas.map((i) => ({
+          id: i.id,
+          text: i.text,
+          status: i.status,
+          captured_on: i.created_at.slice(0, 10),
+        })),
+      })
+    }
+
+    case 'create_content_draft': {
+      const hook = requiredString(input, 'hook')
+      if (hook.length > 200) throw new Error('hook is too long (200 max).')
+      const body = requiredString(input, 'body')
+      if (body.length > 4000) throw new Error('body is too long (4000 max).')
+      await createContentDraft(
+        { hook, body, idea_id: optionalString(input, 'idea_id') ?? null },
+        db
+      )
+      return JSON.stringify({ created: { hook } })
+    }
+
+    case 'list_content_drafts': {
+      const statusRaw = optionalString(input, 'status')
+      const status = statusRaw
+        ? oneOf(statusRaw, ['draft', 'posted', 'dropped'] as const, 'status')
+        : 'draft'
+      const drafts = await getContentDrafts(status, db)
+      return JSON.stringify({
+        drafts: drafts.map((d) => ({
+          id: d.id,
+          hook: d.hook,
+          body: d.body,
+          status: d.status,
+          idea_id: d.idea_id,
+        })),
+      })
+    }
+
+    case 'set_content_status': {
+      const kind = oneOf(requiredString(input, 'kind'), ['idea', 'draft'] as const, 'kind')
+      const id = requiredString(input, 'id')
+      if (kind === 'idea') {
+        const status = oneOf(
+          requiredString(input, 'status'),
+          ['inbox', 'drafted', 'posted', 'dropped'] as const,
+          'status'
+        )
+        await setContentIdeaStatus(id, status, db)
+        return JSON.stringify({ updated: { kind, status } })
+      }
+      const status = oneOf(
+        requiredString(input, 'status'),
+        ['draft', 'posted', 'dropped'] as const,
+        'status'
+      )
+      await setContentDraftStatus(id, status, db)
+      return JSON.stringify({ updated: { kind, status } })
     }
 
     // --- writes ------------------------------------------------------------

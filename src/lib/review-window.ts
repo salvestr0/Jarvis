@@ -49,6 +49,26 @@ export function weekWindowSgt(now: Date): WeekWindow {
   }
 }
 
+export type DayWindow = {
+  /** Today, 'YYYY-MM-DD' (SGT) — inclusive. */
+  start: string
+  /** Tomorrow, 'YYYY-MM-DD' — exclusive end of the day. */
+  endExclusive: string
+  /** Today 00:00 SGT as a UTC ISO instant — for timestamptz comparisons. */
+  startInstant: string
+}
+
+/** The current SGT calendar day — the evening content nudge's window. */
+export function dayWindowSgt(now: Date): DayWindow {
+  const sgtMs = now.getTime() + SGT_OFFSET_MS
+  const dayStartMs = Math.floor(sgtMs / DAY_MS) * DAY_MS
+  return {
+    start: isoDate(dayStartMs),
+    endExclusive: isoDate(dayStartMs + DAY_MS),
+    startInstant: new Date(dayStartMs - SGT_OFFSET_MS).toISOString(),
+  }
+}
+
 /** 'YYYY-MM-DD' + n days, immune to local timezone (Date.UTC arithmetic). */
 export function addDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)

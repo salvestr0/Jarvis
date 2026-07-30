@@ -904,4 +904,88 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       required: ['account_id'],
     },
   },
+
+  // --- content loop ----------------------------------------------------------
+  {
+    name: 'save_content_idea',
+    description:
+      'Call this when Jayden explicitly shares a content idea ("content idea: …", "save that as an idea", a voice note with an idea), or when he says yes to your offer to save one. If he tells a story with obvious content value but did NOT ask, offer first ("that could be a post — want me to save it as an idea?") — never silently harvest his venting. This is an ADD: save immediately when asked, confirm in one line.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description:
+            'The idea, worded to still make sense weeks later — keep his phrasing, add missing context in brackets. Max 2000 chars.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'list_content_ideas',
+    description:
+      'Call this when Jayden asks what content ideas he has, or when you need an idea id before drafting from one or changing its status. Returns ideas with the inbox first, newest first.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_content_draft',
+    description:
+      'Call this when Jayden approves a post draft you wrote in this chat, or asks you to save it. Always write the draft IN the conversation first (following your DRAFTING VOICE rules) and let him react — only call this to save the version he approved. If it came from a saved idea, pass idea_id so the idea is marked drafted.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hook: {
+          type: 'string',
+          description:
+            'The first line of the post — the scroll-stopper. Concrete and specific. Max 200 chars.',
+        },
+        body: {
+          type: 'string',
+          description: 'The rest of the post, ready to edit and ship. Max 4000 chars.',
+        },
+        idea_id: {
+          type: 'string',
+          description: 'The content idea this draft came from, if any (from list_content_ideas).',
+        },
+      },
+      required: ['hook', 'body'],
+    },
+  },
+  {
+    name: 'list_content_drafts',
+    description:
+      'Call this when Jayden asks what drafts are ready to ship, wants to post something, or you need a draft id. Default returns the to-ship pile (status "draft"), newest first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['draft', 'posted', 'dropped'],
+          description: 'Which pile to list. Default "draft" — the posts waiting to ship.',
+        },
+      },
+    },
+  },
+  {
+    name: 'set_content_status',
+    description:
+      'Call this when Jayden says an idea or draft was posted or should be dropped ("mark it posted", "drop that one"). This is a MODIFY: if he named the exact item, act; if you are inferring which one he means, confirm first. Idea statuses: inbox, drafted, posted, dropped. Draft statuses: draft, posted, dropped.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['idea', 'draft'],
+          description: 'Whether the id is a content idea or a content draft.',
+        },
+        id: { type: 'string', description: 'The idea or draft id.' },
+        status: {
+          type: 'string',
+          description: 'The new status (see the valid statuses per kind above).',
+        },
+      },
+      required: ['kind', 'id', 'status'],
+    },
+  },
 ]
