@@ -176,8 +176,33 @@ async function notify(payload) {
   return { shown: text }
 }
 
+/**
+ * S3 sleep. SetSuspendState silently no-ops when the calling process is
+ * spawned detached — launch()'s mode, and why the argv version of this
+ * action reported "done" while the PC stayed awake — so the helper is
+ * spawned attached. It blocks until resume, so don't wait for exit: watch
+ * briefly for an early failure (exit code = Win32 error), then report the
+ * suspend as underway; the PC goes down a second or two later.
+ */
+async function sleepPc() {
+  const exe = await ensureHelper('sleep')
+  await new Promise((resolve, reject) => {
+    const child = nodeSpawn(exe, [], { stdio: 'ignore', windowsHide: true })
+    child.on('error', reject)
+    child.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        reject(new Error(`Windows refused the sleep request (error ${code}).`))
+      }
+    })
+    child.unref()
+    setTimeout(resolve, 900)
+  })
+  return { sleeping: true }
+}
+
 const BUILTINS = {
   screenshot: () => screenshot(),
+  sleep: () => sleepPc(),
   'media:play_pause': () => mediaKey('play_pause'),
   'media:next': () => mediaKey('next'),
   'media:prev': () => mediaKey('prev'),

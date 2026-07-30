@@ -8,13 +8,7 @@
     "needs_confirm": false
   },
   "sleep": {
-    "argv": [
-      "powershell",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false)"
-    ],
+    "builtin": "sleep",
     "needs_confirm": false
   },
   "play_pause": {

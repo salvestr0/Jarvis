@@ -11,5 +11,7 @@ for %%A in ("%~dp0agent.log") do if exist %%A if %%~zA gtr 5000000 move /y "%~dp
 echo [%date% %time%] supervisor: starting agent >> "%~dp0agent.log"
 node pc-agent\agent.mjs >> "%~dp0agent.log" 2>&1
 echo [%date% %time%] supervisor: agent exited, restarting in 5s >> "%~dp0agent.log"
-timeout /t 5 /nobreak > nul
+rem ping, not timeout: timeout needs console stdin and can exit instantly in
+rem this hidden context (seen 30 Jul: a crash restarted every 150ms, not 5s).
+ping -n 6 127.0.0.1 > nul
 goto loop
