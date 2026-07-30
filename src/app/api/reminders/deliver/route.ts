@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { runPriceAlertCheck } from '@/lib/cron/alerts'
 import { runContentNudge } from '@/lib/cron/nudge'
 import { runWeeklyReview } from '@/lib/cron/review'
 import { getBotDb } from '@/lib/jarvis/db'
@@ -112,7 +113,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, due: due.length, sent, failed })
+    // Price alerts piggyback on the same tick — both tickers keep them
+    // fresh for free. A failure here must never take reminders down.
+    let alerts = { pending: 0, fired: 0 }
+    try {
+      alerts = await runPriceAlertCheck(db, chatId)
+    } catch (error) {
+      console.error(
+        '[alerts] check failed:',
+        error instanceof Error ? error.message : error
+      )
+    }
+
+    return NextResponse.json({ ok: true, due: due.length, sent, failed, alerts })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[reminders] failed:', message)

@@ -905,6 +905,59 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
 
+  // --- price alerts ----------------------------------------------------------
+  {
+    name: 'create_price_alert',
+    description:
+      'Call this when Jayden asks to be told when a stock or crypto hits a price ("alert me when BTC hits 120k", "tell me if NVDA drops below 150"). Targets are in USD (market feeds quote USD). This is an ADD: create immediately, then confirm in one line with the current price and the target. Checked about every minute while his PC is awake, every ~5 minutes otherwise. Fires ONCE then completes — if he wants to keep watching after it fires, he creates a new one. If the target is already crossed right now, the tool refuses with the live price — relay it and ask what he actually wants.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The ticker, e.g. "BTC", "ETH", "NVDA", "AAPL". Uppercase.',
+        },
+        kind: {
+          type: 'string',
+          enum: ['stock', 'crypto'],
+          description: 'Whether the symbol is a stock or a crypto coin.',
+        },
+        direction: {
+          type: 'string',
+          enum: ['above', 'below'],
+          description: '"above" fires when price >= target, "below" when price <= target.',
+        },
+        target_price: {
+          type: 'string',
+          description:
+            'The USD level as he said it — "120000", "$120,000", "0.35". Convert shorthand like "120k" to digits yourself.',
+        },
+      },
+      required: ['symbol', 'kind', 'direction', 'target_price'],
+    },
+  },
+  {
+    name: 'list_price_alerts',
+    description:
+      'Call this when Jayden asks what price alerts are set, or before cancelling one to get its id. Returns pending alerts with USD targets.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'cancel_price_alert',
+    description:
+      'Call this when Jayden asks to remove a price alert ("cancel the BTC alert"). Status flip, recoverable by recreating. If he named the alert unambiguously, act; if several could match, confirm which one first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        alert_id: {
+          type: 'string',
+          description: 'The alert id, from list_price_alerts.',
+        },
+      },
+      required: ['alert_id'],
+    },
+  },
+
   // --- content loop ----------------------------------------------------------
   {
     name: 'save_content_idea',

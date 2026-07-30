@@ -17,6 +17,14 @@ import { sendPhoto } from '@/lib/telegram/api'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
 import { formatSgt, parseSgt, validateDueAt } from '@/lib/reminders'
+import { alertCrossed, formatUsdMicros, parseUsdToMicros } from '@/lib/alerts'
+import { fetchCryptoPrices, fetchStockPrices } from '@/lib/prices'
+import {
+  cancelPriceAlert,
+  createPriceAlert,
+  getPendingPriceAlerts,
+  type PriceAlertKind,
+} from '@/lib/queries/price-alerts'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
 import {
   createContentDraft,
@@ -660,6 +668,77 @@ export async function executeTool(
 
     case 'cancel_reminder': {
       await cancelReminder(requiredString(input, 'reminder_id'), db)
+      return JSON.stringify({ cancelled: true })
+    }
+
+    // --- price alerts --------------------------------------------------------
+
+    case 'create_price_alert': {
+      const symbol = requiredString(input, 'symbol').toUpperCase()
+      if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol))
+        throw new Error('symbol must be a plain ticker like BTC or NVDA.')
+      const kind: PriceAlertKind = oneOf(
+        requiredString(input, 'kind'),
+        ['stock', 'crypto'] as const,
+        'kind'
+      )
+      const direction = oneOf(
+        requiredString(input, 'direction'),
+        ['above', 'below'] as const,
+        'direction'
+      )
+      const parsed = parseUsdToMicros(requiredString(input, 'target_price'))
+      if (!parsed.ok) throw new Error(parsed.error)
+
+      // One live quote up front: validates the ticker (typos fail HERE, not
+      // as an alert that silently never fires) and catches already-true
+      // targets, which would otherwise fire as junk within a minute.
+      const quote =
+        kind === 'crypto'
+          ? await fetchCryptoPrices([symbol])
+          : await fetchStockPrices([symbol])
+      const current = quote.prices[0]?.priceMicros
+      if (current === undefined) {
+        throw new Error(
+          `Could not get a price for ${symbol} as a ${kind}: ${quote.failures[0]?.reason ?? 'no price returned'}`
+        )
+      }
+      if (alertCrossed(direction, parsed.micros, current)) {
+        throw new Error(
+          `${symbol} is already at ${formatUsdMicros(current)}, which is ${direction} ${formatUsdMicros(parsed.micros)} — the alert would fire immediately. Ask Jayden if he meant the other direction or a different level.`
+        )
+      }
+
+      await createPriceAlert(
+        { symbol, kind, direction, target_micros: parsed.micros },
+        db
+      )
+      return JSON.stringify({
+        created: {
+          symbol,
+          kind,
+          direction,
+          target_usd: formatUsdMicros(parsed.micros),
+          current_usd: formatUsdMicros(current),
+        },
+      })
+    }
+
+    case 'list_price_alerts': {
+      const alerts = await getPendingPriceAlerts(db)
+      return JSON.stringify({
+        alerts: alerts.map((a) => ({
+          id: a.id,
+          symbol: a.symbol,
+          kind: a.kind,
+          direction: a.direction,
+          target_usd: formatUsdMicros(a.target_micros),
+        })),
+      })
+    }
+
+    case 'cancel_price_alert': {
+      await cancelPriceAlert(requiredString(input, 'alert_id'), db)
       return JSON.stringify({ cancelled: true })
     }
 
