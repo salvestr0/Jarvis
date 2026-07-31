@@ -24,6 +24,9 @@ export async function transcribeVoice(audio: Uint8Array): Promise<string> {
   // Telegram voice notes are OGG/Opus; the extension is what tells Whisper.
   form.append('file', new Blob([audio as BlobPart], { type: 'audio/ogg' }), 'voice.ogg')
   form.append('model', MODEL)
+  // Without this Whisper auto-detects the language, and short clips of
+  // Singaporean-accented English get misread as Malay/Indonesian.
+  form.append('language', 'en')
   // Nudges the model toward the vocabulary this bot actually hears.
   form.append(
     'prompt',
