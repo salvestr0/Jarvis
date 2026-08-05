@@ -14,6 +14,7 @@ export const NAV_ITEMS = [
   { href: '/projects', label: 'Projects' },
   { href: '/goals', label: 'Goals' },
   { href: '/tasks', label: 'Tasks' },
+  { href: '/llm', label: 'LLM' },
   { href: '/settings', label: 'Settings' },
 ] as const
 

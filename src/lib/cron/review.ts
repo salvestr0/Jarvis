@@ -2,7 +2,9 @@ import 'server-only'
 
 import Anthropic from '@anthropic-ai/sdk'
 
+import { errorRow, extractUsageRow } from '@/lib/llm'
 import { formatMoney } from '@/lib/money'
+import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { getFacts } from '@/lib/queries/facts'
 import { getGoals } from '@/lib/queries/goals'
 import { getMetrics, getProjects } from '@/lib/queries/projects'
@@ -188,8 +190,10 @@ export async function runWeeklyReview(
 ): Promise<{ text: string; composedBy: 'claude' | 'fallback' }> {
   const content = await gather(db, now)
 
+  const callStart = Date.now()
+  let response: Anthropic.Message
   try {
-    const response = await getClient().messages.create({
+    response = await getClient().messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 1500,
       output_config: { effort: 'low' },
@@ -208,7 +212,26 @@ export async function runWeeklyReview(
       ].join('\n'),
       messages: [{ role: 'user', content: JSON.stringify(content) }],
     })
+  } catch (error) {
+    await logLlmCall(db, {
+      source: 'weekly_review',
+      latencyMs: Date.now() - callStart,
+      ...errorRow('claude-sonnet-5', error),
+    })
+    console.error(
+      '[review] compose failed, using fallback:',
+      error instanceof Error ? error.message : error
+    )
+    return { text: fallbackRender(content), composedBy: 'fallback' }
+  }
 
+  await logLlmCall(db, {
+    source: 'weekly_review',
+    latencyMs: Date.now() - callStart,
+    ...extractUsageRow(response),
+  })
+
+  try {
     if (response.stop_reason === 'refusal') throw new Error('compose refused')
 
     const text = response.content

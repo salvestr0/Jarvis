@@ -5,9 +5,12 @@ import Anthropic from '@anthropic-ai/sdk'
 import { currentMonth, shiftMonth, todayISO } from '@/lib/date'
 import { listEvents, type CalendarEvent } from '@/lib/google/calendar'
 import { searchMessages, type EmailSummary } from '@/lib/google/gmail'
+import { errorRow, extractUsageRow } from '@/lib/llm'
 import { getBotDb } from '@/lib/jarvis/db'
+import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { saveAssistantNote } from '@/lib/jarvis/history'
 import { computeSignals, type Signal } from '@/lib/jarvis/signals'
+import type { Db } from '@/lib/queries/db'
 import { getNetWorthHistory } from '@/lib/queries/dashboard'
 import { getFacts } from '@/lib/queries/facts'
 import { getGoals } from '@/lib/queries/goals'
@@ -90,10 +93,13 @@ function fallbackRender(content: DigestContent): string {
 }
 
 async function composeDigest(
-  content: DigestContent
+  content: DigestContent,
+  db: Db
 ): Promise<{ text: string; composedBy: 'claude' | 'fallback' }> {
+  const callStart = Date.now()
+  let response: Anthropic.Message
   try {
-    const response = await getClient().messages.create({
+    response = await getClient().messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 1024,
       output_config: { effort: 'low' },
@@ -108,7 +114,26 @@ async function composeDigest(
       ].join('\n'),
       messages: [{ role: 'user', content: JSON.stringify(content) }],
     })
+  } catch (error) {
+    await logLlmCall(db, {
+      source: 'digest',
+      latencyMs: Date.now() - callStart,
+      ...errorRow('claude-sonnet-5', error),
+    })
+    console.error(
+      '[cron/digest] compose failed, using fallback:',
+      error instanceof Error ? error.message : error
+    )
+    return { text: fallbackRender(content), composedBy: 'fallback' }
+  }
 
+  await logLlmCall(db, {
+    source: 'digest',
+    latencyMs: Date.now() - callStart,
+    ...extractUsageRow(response),
+  })
+
+  try {
     if (response.stop_reason === 'refusal') throw new Error('compose refused')
 
     const text = response.content
@@ -242,13 +267,16 @@ export async function runDailyDigest(): Promise<DigestReport> {
     return report
   }
 
-  const { text, composedBy } = await composeDigest({
-    today,
-    signals,
-    events,
-    emails,
-    facts: facts.map((f) => f.content),
-  })
+  const { text, composedBy } = await composeDigest(
+    {
+      today,
+      signals,
+      events,
+      emails,
+      facts: facts.map((f) => f.content),
+    },
+    db
+  )
   report.composedBy = composedBy
 
   for (const chunk of chunkTelegramMessage(text)) {

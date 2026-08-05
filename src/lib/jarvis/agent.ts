@@ -1,11 +1,15 @@
 import 'server-only'
 
+import { randomUUID } from 'node:crypto'
+
 import Anthropic from '@anthropic-ai/sdk'
 
 import { nowSGT } from '@/lib/date'
+import { errorRow, extractUsageRow } from '@/lib/llm'
 import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
+import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { TOOL_SCHEMAS } from '@/lib/jarvis/tool-schemas'
 import { DRAFTING_VOICE } from '@/lib/jarvis/voice'
 import { getFacts, type Fact } from '@/lib/queries/facts'
@@ -160,6 +164,8 @@ function textOf(response: Anthropic.Message): string {
 
 export async function runJarvis(userText: string): Promise<string> {
   const receivedAt = Date.now()
+  // Groups this turn's llm_calls rows — one turn can make several API calls.
+  const turnId = randomUUID()
   const db = await getBotDb()
   const [history, facts] = await Promise.all([loadHistory(db), getFacts(db)])
 
@@ -178,14 +184,38 @@ export async function runJarvis(userText: string): Promise<string> {
       break
     }
 
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      // Snappy replies; adaptive thinking stays on by default on Opus 5.
-      output_config: { effort: 'low' },
-      system: buildSystemPrompt(facts),
-      tools: [...TOOL_SCHEMAS, WEB_SEARCH_TOOL] as Anthropic.Tool[],
-      messages,
+    const callStart = Date.now()
+    let response: Anthropic.Message
+    try {
+      response = await getClient().messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        // Snappy replies; adaptive thinking stays on by default on Opus 5.
+        output_config: { effort: 'low' },
+        system: buildSystemPrompt(facts),
+        tools: [...TOOL_SCHEMAS, WEB_SEARCH_TOOL] as Anthropic.Tool[],
+        messages,
+      })
+    } catch (error) {
+      await logLlmCall(db, {
+        source: 'telegram',
+        turnId,
+        iteration: i,
+        latencyMs: Date.now() - callStart,
+        ...errorRow(MODEL, error),
+      })
+      // Rethrow unchanged — the webhook route's catch owns the apology reply.
+      throw error
+    }
+
+    // Logged before the stop_reason branches so every call gets a row,
+    // pause_turn continuations and the final-round bail included.
+    await logLlmCall(db, {
+      source: 'telegram',
+      turnId,
+      iteration: i,
+      latencyMs: Date.now() - callStart,
+      ...extractUsageRow(response),
     })
 
     // Safety classifiers can decline a request — check before reading content.
