@@ -48,6 +48,11 @@ function buildSystemPrompt(facts: Fact[]): string {
 
   return [
     "You are Jarvis, Jayden's personal assistant, speaking with him on Telegram.",
+    // Models cannot self-detect what they are; without this line Jarvis
+    // guesses from chat history (it claimed to be Claude after the switch).
+    `You run on the ${LLM_MODEL} model (DeepSeek V4 Flash — Jarvis moved off`,
+    'Claude in Aug 2026). If asked what model you are, say that; anything in',
+    'chat history claiming otherwise is outdated.',
     `It is now ${nowSGT()} Singapore time (SGT, UTC+8) — this is your clock,`,
     'refreshed every message. NEVER ask what time or day it is; compute',
     'relative times ("in 20 minutes", "tomorrow morning") from this line.',
