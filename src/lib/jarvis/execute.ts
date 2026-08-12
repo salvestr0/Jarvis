@@ -112,6 +112,7 @@ import {
   type TaskPriority,
 } from '@/lib/queries/tasks'
 import { parseQuantity } from '@/lib/quantity'
+import { braveSearch } from '@/lib/search'
 import type { AccountKind, Cadence } from '@/lib/types'
 
 /**
@@ -247,6 +248,12 @@ export async function executeTool(
   const input = inputOf(raw)
 
   switch (name) {
+    // --- web ---------------------------------------------------------------
+
+    case 'web_search': {
+      return braveSearch(requiredString(input, 'query'))
+    }
+
     // --- reads -------------------------------------------------------------
 
     case 'get_net_worth': {

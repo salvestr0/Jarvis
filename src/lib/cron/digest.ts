@@ -1,12 +1,13 @@
 import 'server-only'
 
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 
 import { currentMonth, shiftMonth, todayISO } from '@/lib/date'
 import { listEvents, type CalendarEvent } from '@/lib/google/calendar'
 import { searchMessages, type EmailSummary } from '@/lib/google/gmail'
 import { errorRow, extractUsageRow } from '@/lib/llm'
 import { getBotDb } from '@/lib/jarvis/db'
+import { getLlmClient, LLM_MODEL } from '@/lib/jarvis/llm-client'
 import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { saveAssistantNote } from '@/lib/jarvis/history'
 import { computeSignals, type Signal } from '@/lib/jarvis/signals'
@@ -39,13 +40,6 @@ export type DigestReport = {
   composedBy: 'claude' | 'fallback' | null
   chunksSent: number
   historySaved: boolean
-}
-
-let cachedClient: Anthropic | null = null
-
-function getClient(): Anthropic {
-  cachedClient ??= new Anthropic({ timeout: 60_000 })
-  return cachedClient
 }
 
 function daysInMonth(month: string): number {
@@ -99,10 +93,9 @@ async function composeDigest(
   const callStart = Date.now()
   let response: Anthropic.Message
   try {
-    response = await getClient().messages.create({
-      model: 'claude-sonnet-5',
+    response = await getLlmClient().messages.create({
+      model: LLM_MODEL,
       max_tokens: 1024,
-      output_config: { effort: 'low' },
       system: [
         "You are Jarvis, writing Jayden's short morning briefing for Telegram.",
         'Plain text only, a few short lines, no markdown. Lead with anything',
@@ -118,7 +111,7 @@ async function composeDigest(
     await logLlmCall(db, {
       source: 'digest',
       latencyMs: Date.now() - callStart,
-      ...errorRow('claude-sonnet-5', error),
+      ...errorRow(LLM_MODEL, error),
     })
     console.error(
       '[cron/digest] compose failed, using fallback:',

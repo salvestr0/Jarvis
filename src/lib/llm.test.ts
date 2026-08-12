@@ -45,19 +45,18 @@ test('extractUsageRow reads tokens and coalesces null cache fields to 0', () => 
   assert.equal(row.error, null)
 })
 
-test('extractUsageRow collects tool names and folds in server-side web search', () => {
+test('extractUsageRow collects tool names, web_search included like any other', () => {
   const row = extractUsageRow(
     fakeMessage({
       content: [
         { type: 'text', text: 'working on it' },
         { type: 'tool_use', id: 't1', name: 'add_expense', input: {} },
-        { type: 'tool_use', id: 't2', name: 'list_tasks', input: {} },
+        { type: 'tool_use', id: 't2', name: 'web_search', input: { query: 'btc' } },
       ],
-      usage: { server_tool_use: { web_search_requests: 2 } },
       stop_reason: 'tool_use',
     })
   )
-  assert.deepEqual(row.tools_called, ['add_expense', 'list_tasks', 'web_search'])
+  assert.deepEqual(row.tools_called, ['add_expense', 'web_search'])
   assert.equal(row.stop_reason, 'tool_use')
 })
 
@@ -105,6 +104,31 @@ test('estimateCostCents prices cache writes at 1.25x and reads at 0.1x input', (
     cache_read_input_tokens: 1_000_000, // 200 * 0.1 = 20
   })
   assert.equal(cents, 270)
+})
+
+test('estimateCostCents prices deepseek-v4-flash at $0.14/$0.28 per MTok', () => {
+  // 1M in + 1M out = 14 + 28 fractional cents.
+  const cents = estimateCostCents({
+    created_at: '2026-08-12T02:00:00Z',
+    model: 'deepseek-v4-flash',
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  })
+  assert.equal(cents, 42)
+})
+
+test('estimateCostCents prices deepseek cache reads at 0.02x with no write surcharge', () => {
+  const cents = estimateCostCents({
+    created_at: '2026-08-12T02:00:00Z',
+    model: 'deepseek-v4-flash',
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 1_000_000, // 14 * 1.0 = 14
+    cache_read_input_tokens: 1_000_000, // 14 * 0.02 = 0.28
+  })
+  assert.equal(cents, 14.28)
 })
 
 test('estimateCostCents returns 0 for an unknown model instead of crashing', () => {

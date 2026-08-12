@@ -15,7 +15,7 @@ import { getLlmCallsSince, getRecentLlmCalls } from '@/lib/queries/llm'
 
 /**
  * LLM observability (step 1 of the production-AI roadmap): what every
- * Claude call cost, how long it took, and which tools it used. Costs are
+ * model call cost, how long it took, and which tools it used. Costs are
  * estimates in USD — that's the currency the API bills in — computed from
  * tokens at render time, never stored.
  */
@@ -85,7 +85,7 @@ export default async function LlmPage() {
     <>
       <PageHeader
         title="LLM"
-        description="Every Claude call Jarvis makes — tokens, estimated cost (USD), latency."
+        description="Every model call Jarvis makes — tokens, estimated cost (USD), latency."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

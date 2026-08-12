@@ -25,15 +25,11 @@ export type LlmUsageRow = {
 
 /** Extract the loggable fields from a successful response. */
 export function extractUsageRow(response: Anthropic.Message): LlmUsageRow {
+  // web_search included: since the move to DeepSeek + Brave it is an
+  // ordinary client-side tool, so it shows up here like any other.
   const toolsCalled = response.content
     .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
     .map((b) => b.name)
-
-  // Server-side web search never appears as a tool_use block — only as a
-  // request count on usage. Fold it into the same column.
-  if ((response.usage.server_tool_use?.web_search_requests ?? 0) > 0) {
-    toolsCalled.push('web_search')
-  }
 
   return {
     // response.model over the request constant: it's what actually served.
@@ -70,16 +66,42 @@ export function errorRow(model: string, error: unknown): LlmUsageRow {
 type Pricing = {
   inputPerMTokCents: number
   outputPerMTokCents: number
+  /** Cache-write tokens bill at this multiple of the input rate. */
+  cacheWriteMult: number
+  /** Cache-read tokens bill at this multiple of the input rate. */
+  cacheReadMult: number
 }
 
 // claude-sonnet-5: $3/$15 per MTok standard, intro $2/$10 through
 // 2026-08-31 (per Anthropic pricing as of 5 Aug 2026). The row's
 // created_at picks the rate so historical spend keeps matching the
-// invoice after the intro window ends.
-const SONNET_5_INTRO: Pricing = { inputPerMTokCents: 200, outputPerMTokCents: 1000 }
-const SONNET_5_STANDARD: Pricing = { inputPerMTokCents: 300, outputPerMTokCents: 1500 }
+// invoice after the intro window ends. Anthropic bills cache writes at
+// 1.25x input and reads at 0.1x.
+const SONNET_5_INTRO: Pricing = {
+  inputPerMTokCents: 200,
+  outputPerMTokCents: 1000,
+  cacheWriteMult: 1.25,
+  cacheReadMult: 0.1,
+}
+const SONNET_5_STANDARD: Pricing = {
+  inputPerMTokCents: 300,
+  outputPerMTokCents: 1500,
+  cacheWriteMult: 1.25,
+  cacheReadMult: 0.1,
+}
+
+// deepseek-v4-flash: $0.14/$0.28 per MTok (per DeepSeek pricing as of
+// 12 Aug 2026). Caching is automatic with no write surcharge; cache-hit
+// input bills at $0.0028/MTok = 0.02x the miss rate.
+const DEEPSEEK_V4_FLASH: Pricing = {
+  inputPerMTokCents: 14,
+  outputPerMTokCents: 28,
+  cacheWriteMult: 1,
+  cacheReadMult: 0.02,
+}
 
 function pricingFor(model: string, createdAtIso: string): Pricing | null {
+  if (model.startsWith('deepseek-v4-flash')) return DEEPSEEK_V4_FLASH
   if (model.startsWith('claude-sonnet-5')) {
     return createdAtIso < '2026-09' ? SONNET_5_INTRO : SONNET_5_STANDARD
   }
@@ -98,7 +120,7 @@ export type LlmCostFields = {
 /**
  * Estimated cost in fractional US cents. Unknown model -> 0: a future
  * model id must never crash the page, just show up costless until the
- * pricing table learns it. Cache write bills at 1.25x input, read at 0.1x.
+ * pricing table learns it. Cache multipliers are per-model (see Pricing).
  */
 export function estimateCostCents(row: LlmCostFields): number {
   const p = pricingFor(row.model, row.created_at)
@@ -106,8 +128,8 @@ export function estimateCostCents(row: LlmCostFields): number {
   return (
     (row.input_tokens * p.inputPerMTokCents +
       row.output_tokens * p.outputPerMTokCents +
-      row.cache_creation_input_tokens * p.inputPerMTokCents * 1.25 +
-      row.cache_read_input_tokens * p.inputPerMTokCents * 0.1) /
+      row.cache_creation_input_tokens * p.inputPerMTokCents * p.cacheWriteMult +
+      row.cache_read_input_tokens * p.inputPerMTokCents * p.cacheReadMult) /
     1_000_000
   )
 }

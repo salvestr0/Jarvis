@@ -2,13 +2,14 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 
 import { nowSGT } from '@/lib/date'
 import { errorRow, extractUsageRow } from '@/lib/llm'
 import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
+import { getLlmClient, LLM_MODEL } from '@/lib/jarvis/llm-client'
 import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { TOOL_SCHEMAS } from '@/lib/jarvis/tool-schemas'
 import { DRAFTING_VOICE } from '@/lib/jarvis/voice'
@@ -22,9 +23,8 @@ import { getFacts, type Fact } from '@/lib/queries/facts'
  * and every step is inspectable in the Vercel function logs.
  */
 
-const MODEL = 'claude-sonnet-5'
-// Caps thinking + text combined. Answers are short; the ceiling is for the
-// tool-calling turns in the middle, not the final reply.
+// Answers are short; the ceiling is for the tool-calling turns in the
+// middle, not the final reply.
 const MAX_TOKENS = 8192
 // A question needing more than 8 round trips is beyond what a chat bot
 // should silently burn tokens on.
@@ -35,31 +35,6 @@ const MAX_ITERATIONS = 8
 // no Telegram redelivery. 150s + one worst-case round (120s API + tools)
 // still lands inside the budget with room to send the reply.
 const DEADLINE_MS = 150_000
-
-/**
- * Web search runs on Anthropic's servers, not here — Claude issues the query,
- * Anthropic executes it, and results arrive in the same response. Nothing to
- * host and no key of ours. Declared at the call site rather than in
- * tool-schemas.ts because server tools have no input_schema of their own.
- *
- * No user_location: the API rejects country code SG. The system prompt
- * already establishes Singapore, so local questions get "Singapore" in the
- * query instead. max_uses caps the cost of one runaway question.
- */
-const WEB_SEARCH_TOOL = {
-  type: 'web_search_20260209',
-  name: 'web_search',
-  max_uses: 5,
-}
-
-let cachedClient: Anthropic | null = null
-
-function getClient(): Anthropic {
-  // Lazy: `new Anthropic()` throws when ANTHROPIC_API_KEY is missing, and
-  // module scope would turn that into a build-time failure.
-  cachedClient ??= new Anthropic({ timeout: 120_000 })
-  return cachedClient
-}
 
 function buildSystemPrompt(facts: Fact[]): string {
   const factsBlock =
@@ -153,7 +128,7 @@ function buildSystemPrompt(facts: Fact[]): string {
   ].join('\n')
 }
 
-/** Everything Claude said in text blocks, joined — the Telegram reply. */
+/** Everything the model said in text blocks, joined — the Telegram reply. */
 function textOf(response: Anthropic.Message): string {
   return response.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -187,13 +162,11 @@ export async function runJarvis(userText: string): Promise<string> {
     const callStart = Date.now()
     let response: Anthropic.Message
     try {
-      response = await getClient().messages.create({
-        model: MODEL,
+      response = await getLlmClient().messages.create({
+        model: LLM_MODEL,
         max_tokens: MAX_TOKENS,
-        // Snappy replies; adaptive thinking stays on by default on Opus 5.
-        output_config: { effort: 'low' },
         system: buildSystemPrompt(facts),
-        tools: [...TOOL_SCHEMAS, WEB_SEARCH_TOOL] as Anthropic.Tool[],
+        tools: TOOL_SCHEMAS as Anthropic.Tool[],
         messages,
       })
     } catch (error) {
@@ -202,7 +175,7 @@ export async function runJarvis(userText: string): Promise<string> {
         turnId,
         iteration: i,
         latencyMs: Date.now() - callStart,
-        ...errorRow(MODEL, error),
+        ...errorRow(LLM_MODEL, error),
       })
       // Rethrow unchanged — the webhook route's catch owns the apology reply.
       throw error
@@ -224,9 +197,9 @@ export async function runJarvis(userText: string): Promise<string> {
       break
     }
 
-    // Anthropic's server-side search loop hit its own iteration cap. Echo the
-    // turn back verbatim and it resumes — adding a "continue" message here
-    // would break the resume.
+    // Anthropic-protocol resume signal (won't occur on DeepSeek's compat
+    // endpoint, kept because handling it is free): echo the turn back
+    // verbatim and it resumes — a "continue" message would break the resume.
     if (response.stop_reason === 'pause_turn') {
       messages.push({ role: 'assistant', content: response.content })
       continue
@@ -260,7 +233,7 @@ export async function runJarvis(userText: string): Promise<string> {
     messages.push({ role: 'assistant', content: response.content })
 
     // All results go back in ONE user message; a failed tool reports its
-    // error with is_error so Claude can recover instead of the turn dying.
+    // error with is_error so the model can recover instead of the turn dying.
     const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
       toolUses.map(async (block) => {
         try {

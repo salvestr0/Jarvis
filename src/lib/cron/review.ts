@@ -1,9 +1,10 @@
 import 'server-only'
 
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 
 import { errorRow, extractUsageRow } from '@/lib/llm'
 import { formatMoney } from '@/lib/money'
+import { getLlmClient, LLM_MODEL } from '@/lib/jarvis/llm-client'
 import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { getFacts } from '@/lib/queries/facts'
 import { getGoals } from '@/lib/queries/goals'
@@ -49,13 +50,6 @@ type ReviewContent = {
   }
   active_goals: string[]
   facts: string[]
-}
-
-let cachedClient: Anthropic | null = null
-
-function getClient(): Anthropic {
-  cachedClient ??= new Anthropic({ timeout: 60_000 })
-  return cachedClient
 }
 
 async function gather(db: Db, now: Date): Promise<ReviewContent> {
@@ -193,10 +187,9 @@ export async function runWeeklyReview(
   const callStart = Date.now()
   let response: Anthropic.Message
   try {
-    response = await getClient().messages.create({
-      model: 'claude-sonnet-5',
+    response = await getLlmClient().messages.create({
+      model: LLM_MODEL,
       max_tokens: 1500,
-      output_config: { effort: 'low' },
       system: [
         "You are Jarvis, writing Jayden's Sunday-evening weekly review for",
         'Telegram. Plain text, short lines, no markdown. This is an evidence',
@@ -216,7 +209,7 @@ export async function runWeeklyReview(
     await logLlmCall(db, {
       source: 'weekly_review',
       latencyMs: Date.now() - callStart,
-      ...errorRow('claude-sonnet-5', error),
+      ...errorRow(LLM_MODEL, error),
     })
     console.error(
       '[review] compose failed, using fallback:',

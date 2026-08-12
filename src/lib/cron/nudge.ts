@@ -1,9 +1,10 @@
 import 'server-only'
 
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 
 import { errorRow, extractUsageRow } from '@/lib/llm'
 import { formatMoney } from '@/lib/money'
+import { getLlmClient, LLM_MODEL } from '@/lib/jarvis/llm-client'
 import { logLlmCall } from '@/lib/jarvis/llm-log'
 import { getContentCounts } from '@/lib/queries/content'
 import { getMetrics, getProjects } from '@/lib/queries/projects'
@@ -36,13 +37,6 @@ type NudgeContent = {
 /** The nudge that needs no model: short, zero guilt, still a real ask. */
 const FALLBACK =
   'Anything from today worth capturing as a content idea? One line is enough.'
-
-let cachedClient: Anthropic | null = null
-
-function getClient(): Anthropic {
-  cachedClient ??= new Anthropic({ timeout: 60_000 })
-  return cachedClient
-}
 
 async function gather(db: Db, now: Date): Promise<NudgeContent> {
   const day = dayWindowSgt(now)
@@ -86,10 +80,9 @@ export async function runContentNudge(
   const callStart = Date.now()
   let response: Anthropic.Message
   try {
-    response = await getClient().messages.create({
-      model: 'claude-sonnet-5',
+    response = await getLlmClient().messages.create({
+      model: LLM_MODEL,
       max_tokens: 300,
-      output_config: { effort: 'low' },
       system: [
         "You are Jarvis, sending Jayden's single evening content nudge on",
         'Telegram. Plain text, no markdown, at most 3 short lines. Look at',
@@ -107,7 +100,7 @@ export async function runContentNudge(
     await logLlmCall(db, {
       source: 'content_nudge',
       latencyMs: Date.now() - callStart,
-      ...errorRow('claude-sonnet-5', error),
+      ...errorRow(LLM_MODEL, error),
     })
     console.error(
       '[nudge] compose failed, using fallback:',
