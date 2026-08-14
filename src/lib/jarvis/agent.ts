@@ -7,6 +7,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import {
   ACTION_CLAIM_RETRY_PROMPT,
   claimsAction,
+  ranActionTool,
   UNVERIFIED_ACTION_WARNING,
 } from '@/lib/action-claim'
 import { nowSGT } from '@/lib/date'
@@ -171,9 +172,10 @@ export async function runJarvis(userText: string): Promise<string> {
 
   let finalText = 'Sorry — that took too many steps. Try asking more directly.'
   // Fabrication guard state (DeepSeek claims actions it never performed —
-  // see src/lib/action-claim.ts). A turn that executed at least one real
-  // tool is trusted; a claiming reply with zero tool calls gets one retry.
-  let toolsRanThisTurn = false
+  // see src/lib/action-claim.ts). Reads do NOT count: one real fabrication
+  // came right after search_email/get_email, claiming the transactions it
+  // had just READ were logged. Only an action tool clears the claim.
+  let actionRanThisTurn = false
   let claimRetried = false
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -246,23 +248,23 @@ export async function runJarvis(userText: string): Promise<string> {
 
     if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
       const text = textOf(response)
-      // Fabrication guard: "Logged: …" with zero tool calls in the whole
-      // turn means nothing was recorded. Discard the reply and make the
+      // Fabrication guard: "Logged: …" with no action tool run in the whole
+      // turn means nothing was written. Discard the reply and make the
       // model either do the work or drop the claim — once; if the retry
       // still claims without acting, deliver it with a warning attached
       // (it may legitimately be describing records that already exist).
-      if (!toolsRanThisTurn && claimsAction(text)) {
+      if (!actionRanThisTurn && claimsAction(text)) {
         if (!claimRetried) {
           claimRetried = true
           console.error(
-            '[jarvis] fabrication guard: action claim with zero tool calls — retrying'
+            '[jarvis] fabrication guard: action claim with no action tool — retrying'
           )
           messages.push({ role: 'assistant', content: response.content })
           messages.push({ role: 'user', content: ACTION_CLAIM_RETRY_PROMPT })
           continue
         }
         console.error(
-          '[jarvis] fabrication guard: retry still claims with zero tool calls — warning appended'
+          '[jarvis] fabrication guard: retry still claims without acting — warning appended'
         )
         finalText = `${text}\n\n${UNVERIFIED_ACTION_WARNING}`
         break
@@ -304,7 +306,14 @@ export async function runJarvis(userText: string): Promise<string> {
       })
     )
     messages.push({ role: 'user', content: results })
-    toolsRanThisTurn = true
+
+    // Only tools that SUCCEEDED clear the fabrication guard — a
+    // log_transaction that threw wrote nothing, so a "Logged: …" reply
+    // after it is just as false as one with no tool call at all.
+    const succeeded = toolUses
+      .filter((_, idx) => !results[idx]?.is_error)
+      .map((b) => b.name)
+    if (ranActionTool(succeeded)) actionRanThisTurn = true
   }
 
   try {
