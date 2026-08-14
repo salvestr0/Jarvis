@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto'
 
 import type Anthropic from '@anthropic-ai/sdk'
 
+import {
+  ACTION_CLAIM_RETRY_PROMPT,
+  claimsAction,
+  UNVERIFIED_ACTION_WARNING,
+} from '@/lib/action-claim'
 import { nowSGT } from '@/lib/date'
 import { errorRow, extractUsageRow } from '@/lib/llm'
 import { getBotDb } from '@/lib/jarvis/db'
@@ -165,6 +170,11 @@ export async function runJarvis(userText: string): Promise<string> {
   ]
 
   let finalText = 'Sorry — that took too many steps. Try asking more directly.'
+  // Fabrication guard state (DeepSeek claims actions it never performed —
+  // see src/lib/action-claim.ts). A turn that executed at least one real
+  // tool is trusted; a claiming reply with zero tool calls gets one retry.
+  let toolsRanThisTurn = false
+  let claimRetried = false
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     // Checked before the API call, so tripping it is side-effect-free and a
@@ -235,7 +245,29 @@ export async function runJarvis(userText: string): Promise<string> {
     )
 
     if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
-      finalText = textOf(response) || 'Done.'
+      const text = textOf(response)
+      // Fabrication guard: "Logged: …" with zero tool calls in the whole
+      // turn means nothing was recorded. Discard the reply and make the
+      // model either do the work or drop the claim — once; if the retry
+      // still claims without acting, deliver it with a warning attached
+      // (it may legitimately be describing records that already exist).
+      if (!toolsRanThisTurn && claimsAction(text)) {
+        if (!claimRetried) {
+          claimRetried = true
+          console.error(
+            '[jarvis] fabrication guard: action claim with zero tool calls — retrying'
+          )
+          messages.push({ role: 'assistant', content: response.content })
+          messages.push({ role: 'user', content: ACTION_CLAIM_RETRY_PROMPT })
+          continue
+        }
+        console.error(
+          '[jarvis] fabrication guard: retry still claims with zero tool calls — warning appended'
+        )
+        finalText = `${text}\n\n${UNVERIFIED_ACTION_WARNING}`
+        break
+      }
+      finalText = text || 'Done.'
       break
     }
 
@@ -272,6 +304,7 @@ export async function runJarvis(userText: string): Promise<string> {
       })
     )
     messages.push({ role: 'user', content: results })
+    toolsRanThisTurn = true
   }
 
   try {
