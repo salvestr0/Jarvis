@@ -5,28 +5,41 @@ import { randomUUID } from 'node:crypto'
 import type Anthropic from '@anthropic-ai/sdk'
 
 import {
+  ACTION_TOOLS,
   ACTION_CLAIM_RETRY_PROMPT,
   claimsAction,
-  ranActionTool,
   UNVERIFIED_ACTION_WARNING,
 } from '@/lib/action-claim'
 import { nowSGT } from '@/lib/date'
 import { errorRow, extractUsageRow } from '@/lib/llm'
+import {
+  actionReceiptFromResult,
+  formatActionReceipts,
+  type ActionReceipt,
+} from '@/lib/jarvis/action-receipt'
 import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
-import { getLlmClient, LLM_MODEL } from '@/lib/jarvis/llm-client'
+import {
+  getLlmClient,
+  LLM_FALLBACK_MODEL,
+  LLM_MODEL,
+} from '@/lib/jarvis/llm-client'
 import { logLlmCall } from '@/lib/jarvis/llm-log'
-import { TOOL_SCHEMAS } from '@/lib/jarvis/tool-schemas'
+import {
+  forcedToolNameForRequest,
+  isExplicitToolRequest,
+  selectToolsForTurn,
+} from '@/lib/jarvis/tool-routing'
 import { DRAFTING_VOICE } from '@/lib/jarvis/voice'
 import { getFacts, type Fact } from '@/lib/queries/facts'
 
 /**
  * The Jarvis agent: one Telegram message in, one reply out.
  *
- * A manual tool loop rather than the SDK's beta toolRunner — at fifteen tools
- * and a hard iteration cap this is ~30 lines, has no beta-surface dependency,
- * and every step is inspectable in the Vercel function logs.
+ * A manual tool loop rather than the SDK's beta toolRunner. A deterministic
+ * router gives each turn only the relevant tool groups, and every step remains
+ * inspectable in the Vercel function logs.
  */
 
 // Answers are short; the ceiling is for the tool-calling turns in the
@@ -169,14 +182,32 @@ export async function runJarvis(userText: string): Promise<string> {
     ...history.map((t): Anthropic.MessageParam => ({ role: t.role, content: t.content })),
     { role: 'user', content: userText },
   ]
+  const recentConversation = history.map((turn) => turn.content)
+  const toolSelection = selectToolsForTurn(userText, recentConversation)
+  const explicitToolRequest = isExplicitToolRequest(userText, recentConversation)
+  const requestedForcedTool = forcedToolNameForRequest(userText)
+  const forcedToolName = toolSelection.tools.some(
+    (tool) => tool.name === requestedForcedTool
+  )
+    ? requestedForcedTool
+    : null
+
+  console.info(
+    `[jarvis] routed ${toolSelection.tools.length} tools` +
+      (toolSelection.domains.length > 0
+        ? ` for ${toolSelection.domains.join(',')}`
+        : ' for conversation')
+  )
 
   let finalText = 'Sorry — that took too many steps. Try asking more directly.'
-  // Fabrication guard state (DeepSeek claims actions it never performed —
-  // see src/lib/action-claim.ts). Reads do NOT count: one real fabrication
-  // came right after search_email/get_email, claiming the transactions it
-  // had just READ were logged. Only an action tool clears the claim.
-  let actionRanThisTurn = false
+  // Action replies are generated from these executor receipts after the loop,
+  // never from the model's prose. One success therefore cannot hide a second
+  // failed write or embellish records that were not actually created.
+  const actionReceipts: ActionReceipt[] = []
+  const successfulActionKeys = new Set<string>()
   let claimRetried = false
+  let toolFailureCount = 0
+  let useFallbackModel = false
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     // Checked before the API call, so tripping it is side-effect-free and a
@@ -187,14 +218,29 @@ export async function runJarvis(userText: string): Promise<string> {
     }
 
     const callStart = Date.now()
+    const activeModel = useFallbackModel ? LLM_FALLBACK_MODEL : LLM_MODEL
     let response: Anthropic.Message
     try {
       response = await getLlmClient().messages.create({
-        model: LLM_MODEL,
+        model: activeModel,
         max_tokens: MAX_TOKENS,
         system: buildSystemPrompt(facts),
-        tools: TOOL_SCHEMAS as Anthropic.Tool[],
+        tools: toolSelection.tools as Anthropic.Tool[],
         messages,
+        // DeepSeek rejects tool_choice while thinking is enabled. Exact,
+        // low-ambiguity actions therefore use a forced non-thinking first
+        // call; subsequent rounds return to high-effort thinking. Broader
+        // action requests get max effort without forcing a tool.
+        ...(i === 0 && forcedToolName
+          ? { thinking: { type: 'disabled' as const } }
+          : {
+              output_config: {
+                effort: i === 0 && explicitToolRequest ? ('max' as const) : ('high' as const),
+              },
+            }),
+        ...(i === 0 && forcedToolName
+          ? { tool_choice: { type: 'tool' as const, name: forcedToolName } }
+          : {}),
       })
     } catch (error) {
       await logLlmCall(db, {
@@ -202,7 +248,7 @@ export async function runJarvis(userText: string): Promise<string> {
         turnId,
         iteration: i,
         latencyMs: Date.now() - callStart,
-        ...errorRow(LLM_MODEL, error),
+        ...errorRow(activeModel, error),
       })
       // Rethrow unchanged — the webhook route's catch owns the apology reply.
       throw error
@@ -253,11 +299,12 @@ export async function runJarvis(userText: string): Promise<string> {
       // model either do the work or drop the claim — once; if the retry
       // still claims without acting, deliver it with a warning attached
       // (it may legitimately be describing records that already exist).
-      if (!actionRanThisTurn && claimsAction(text)) {
+      if (actionReceipts.length === 0 && claimsAction(text)) {
         if (!claimRetried) {
           claimRetried = true
+          useFallbackModel = true
           console.error(
-            '[jarvis] fabrication guard: action claim with no action tool — retrying'
+            '[jarvis] fabrication guard: action claim with no action tool — retrying on fallback model'
           )
           messages.push({ role: 'assistant', content: response.content })
           messages.push({ role: 'user', content: ACTION_CLAIM_RETRY_PROMPT })
@@ -281,10 +328,38 @@ export async function runJarvis(userText: string): Promise<string> {
 
     messages.push({ role: 'assistant', content: response.content })
 
+    // Block identical action calls within a batch or after a successful call
+    // earlier in this turn. Read tools may repeat; writes must not duplicate
+    // because a model retry can otherwise create the same record twice.
+    const batchActionKeys = new Set<string>()
+    const actionKeys = toolUses.map((block) =>
+      ACTION_TOOLS.has(block.name)
+        ? `${block.name}:${JSON.stringify(block.input)}`
+        : null
+    )
+    const duplicateActionIndexes = new Set<number>()
+    actionKeys.forEach((key, idx) => {
+      if (key === null) return
+      if (successfulActionKeys.has(key) || batchActionKeys.has(key)) {
+        duplicateActionIndexes.add(idx)
+      } else {
+        batchActionKeys.add(key)
+      }
+    })
+
     // All results go back in ONE user message; a failed tool reports its
     // error with is_error so the model can recover instead of the turn dying.
     const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
-      toolUses.map(async (block) => {
+      toolUses.map(async (block, idx) => {
+        if (duplicateActionIndexes.has(idx)) {
+          console.error(`[jarvis] blocked duplicate action tool: ${block.name}`)
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: block.id,
+            content: 'Duplicate action blocked: this exact action already ran in this turn.',
+            is_error: true,
+          }
+        }
         try {
           return {
             type: 'tool_result' as const,
@@ -307,14 +382,39 @@ export async function runJarvis(userText: string): Promise<string> {
     )
     messages.push({ role: 'user', content: results })
 
-    // Only tools that SUCCEEDED clear the fabrication guard — a
-    // log_transaction that threw wrote nothing, so a "Logged: …" reply
-    // after it is just as false as one with no tool call at all.
-    const succeeded = toolUses
-      .filter((_, idx) => !results[idx]?.is_error)
-      .map((b) => b.name)
-    if (ranActionTool(succeeded)) actionRanThisTurn = true
+    toolFailureCount += results.filter(
+      (result, idx) => result.is_error === true && !duplicateActionIndexes.has(idx)
+    ).length
+    if (toolFailureCount >= 2) useFallbackModel = true
+
+    // Capture every attempted action independently. Read results remain in the
+    // model context, while writes become the final user-visible receipt.
+    for (let idx = 0; idx < toolUses.length; idx++) {
+      if (duplicateActionIndexes.has(idx)) continue
+      const block = toolUses[idx]
+      const result = results[idx]
+      if (!block || !result) continue
+      const output =
+        typeof result.content === 'string'
+          ? result.content
+          : JSON.stringify(result.content)
+      const receipt = actionReceiptFromResult(
+        block.name,
+        block.input,
+        output,
+        result.is_error === true
+      )
+      if (receipt) {
+        actionReceipts.push(receipt)
+        const key = actionKeys[idx]
+        if (key && receipt.outcome !== 'failed') successfulActionKeys.add(key)
+      }
+    }
   }
+
+  // The model can explain read-only answers, but it never authors action
+  // confirmations. Receipts are derived from the executor's real results.
+  if (actionReceipts.length > 0) finalText = formatActionReceipts(actionReceipts)
 
   try {
     await saveTurn(db, userText, finalText, receivedAt)

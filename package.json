@@ -11,6 +11,7 @@
     "db:check": "node scripts/db-check.mjs",
     "db:export": "node scripts/db-export.mjs",
     "test": "node --test \"src/**/*.test.ts\" \"pc-agent/**/*.test.mjs\"",
+    "eval:jarvis": "node --experimental-strip-types scripts/jarvis-routing-eval.mjs",
     "check:actions": "node scripts/check-actions.mjs",
     "audit": "node scripts/security-audit.mjs",
     "review:enable": "node scripts/enable-weekly-review.mjs",

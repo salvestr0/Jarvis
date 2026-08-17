@@ -131,6 +131,19 @@ test('estimateCostCents prices deepseek cache reads at 0.02x with no write surch
   assert.equal(cents, 14.28)
 })
 
+test('estimateCostCents prices the selective deepseek-v4-pro fallback', () => {
+  const cents = estimateCostCents({
+    created_at: '2026-08-17T02:00:00Z',
+    model: 'deepseek-v4-pro',
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 1_000_000,
+  })
+  // $0.435 input + $0.87 output + $0.003625 cached input = $1.308625.
+  assert.equal(cents, 130.8625)
+})
+
 test('estimateCostCents returns 0 for an unknown model instead of crashing', () => {
   const cents = estimateCostCents({
     created_at: '2026-08-10T02:00:00Z',

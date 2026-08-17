@@ -100,8 +100,18 @@ const DEEPSEEK_V4_FLASH: Pricing = {
   cacheReadMult: 0.02,
 }
 
+// deepseek-v4-pro: $0.435/$0.87 per MTok; cache hits are
+// $0.003625/MTok (1/120th of the cache-miss input price).
+const DEEPSEEK_V4_PRO: Pricing = {
+  inputPerMTokCents: 43.5,
+  outputPerMTokCents: 87,
+  cacheWriteMult: 1,
+  cacheReadMult: 1 / 120,
+}
+
 function pricingFor(model: string, createdAtIso: string): Pricing | null {
   if (model.startsWith('deepseek-v4-flash')) return DEEPSEEK_V4_FLASH
+  if (model.startsWith('deepseek-v4-pro')) return DEEPSEEK_V4_PRO
   if (model.startsWith('claude-sonnet-5')) {
     return createdAtIso < '2026-09' ? SONNET_5_INTRO : SONNET_5_STANDARD
   }

@@ -11,6 +11,9 @@ import Anthropic from '@anthropic-ai/sdk'
  */
 
 export const LLM_MODEL = 'deepseek-v4-flash'
+// Used only after an integrity failure or repeated tool errors. Normal turns
+// stay on Flash; this is a reliability escape hatch, not the default bill.
+export const LLM_FALLBACK_MODEL = 'deepseek-v4-pro'
 
 let cachedClient: Anthropic | null = null
 
