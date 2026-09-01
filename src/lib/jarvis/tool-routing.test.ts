@@ -63,6 +63,13 @@ test('multi-domain requests receive both small tool groups', () => {
   assert.ok(selected.includes('get_email'))
   assert.ok(selected.includes('log_transaction'))
   assert.ok(!selected.includes('spotify_play'))
+
+  const retry = names('try again', [
+    "Log today's spending, see my email.",
+    "I found the charges, but I couldn't save them to the tracker.",
+  ])
+  assert.ok(retry.includes('search_email'))
+  assert.ok(retry.includes('log_transaction'))
 })
 
 test('short confirmation inherits the immediately preceding domain', () => {
@@ -122,6 +129,13 @@ test('exact forcing is limited to requests with enough identifying detail', () =
   assert.equal(forcedToolNameForRequest('Take a screenshot'), 'pc_run_action')
   assert.equal(
     forcedToolNameForRequest("Log today's spending, see my email"),
+    'search_email'
+  )
+  assert.equal(
+    forcedToolNameForRequest('try again', [
+      "Log today's spending, see my email.",
+      "I found the charges, but I couldn't save them to the tracker.",
+    ]),
     'search_email'
   )
   assert.equal(forcedToolNameForRequest('Log lunch'), null)

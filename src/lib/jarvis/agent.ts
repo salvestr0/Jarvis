@@ -207,7 +207,12 @@ export async function runJarvis(userText: string): Promise<string> {
   const successfulActionKeys = new Set<string>()
   let claimRetried = false
   let toolFailureCount = 0
-  let useFallbackModel = false
+  // Email-to-finance ingestion is a multi-step read→write workflow. Flash has
+  // repeatedly read the receipts correctly and then falsely claimed the write
+  // tool was unavailable, so use the more reliable model for this narrow path.
+  let useFallbackModel =
+    toolSelection.domains.includes('email') &&
+    toolSelection.domains.includes('finance')
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     // Checked before the API call, so tripping it is side-effect-free and a

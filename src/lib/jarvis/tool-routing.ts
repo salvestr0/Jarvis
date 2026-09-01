@@ -103,7 +103,7 @@ const DOMAIN_PATTERNS: Readonly<Record<ToolDomain, readonly RegExp[]>> = {
 }
 
 const FOLLOW_UP =
-  /^(?:(?:yes|yeah|yep|yup|ok|okay|sure)[,! ]+(?:do it|go ahead|please do)|yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|do it|go ahead|that one|this one|it|please do)[.! ]*$/i
+  /^(?:(?:yes|yeah|yep|yup|ok|okay|sure)[,! ]+(?:do it|go ahead|please do|try again)|yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|do it|go ahead|that one|this one|it|please do|try again|retry|check again)[.! ]*$/i
 
 function matchDomains(text: string): ToolDomain[] {
   return (Object.keys(DOMAIN_PATTERNS) as ToolDomain[]).filter((domain) =>
@@ -125,8 +125,11 @@ export function selectToolsForTurn(
 
   // "yes, do it" needs the tools discussed in the last exchange. Do not mix
   // old domains into a normal new request; that is how the tool list bloats.
-  if (domains.length === 0 && FOLLOW_UP.test(userText.trim())) {
-    domains = matchDomains(recentConversation.slice(-2).join('\n'))
+  if (FOLLOW_UP.test(userText.trim())) {
+    domains = [...new Set([
+      ...domains,
+      ...matchDomains(recentConversation.slice(-2).join('\n')),
+    ])]
   }
 
   const names = new Set<string>(CORE_TOOL_NAMES)
@@ -178,6 +181,9 @@ export function forcedToolNameForRequest(
   recentConversation: readonly string[] = []
 ): string | null {
   const text = userText.trim()
+  const intentText = FOLLOW_UP.test(text)
+    ? `${recentConversation.slice(-2).join('\n')}\n${text}`
+    : text
   const hasAmount =
     /(?:^|\s)(?:s\$|sgd|\$)?\s*\d+(?:\.\d{1,2})?(?:\s|$)/i.test(text)
 
@@ -195,9 +201,9 @@ export function forcedToolNameForRequest(
   // the choice entirely to the model has caused it to claim the tools are
   // unavailable even though both routed groups were present.
   if (
-    /\b(?:email|emails|gmail|inbox|mail)\b/i.test(text) &&
-    /\b(?:log|record|add)\b/i.test(text) &&
-    /\b(?:spending|expense|expenses|transaction|transactions)\b/i.test(text)
+    /\b(?:email|emails|gmail|inbox|mail)\b/i.test(intentText) &&
+    /\b(?:log|record|add|save)\b/i.test(intentText) &&
+    /\b(?:spending|expense|expenses|transaction|transactions|charges)\b/i.test(intentText)
   ) {
     return 'search_email'
   }
