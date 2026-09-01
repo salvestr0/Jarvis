@@ -185,7 +185,7 @@ export async function runJarvis(userText: string): Promise<string> {
   const recentConversation = history.map((turn) => turn.content)
   const toolSelection = selectToolsForTurn(userText, recentConversation)
   const explicitToolRequest = isExplicitToolRequest(userText, recentConversation)
-  const requestedForcedTool = forcedToolNameForRequest(userText)
+  const requestedForcedTool = forcedToolNameForRequest(userText, recentConversation)
   const forcedToolName = toolSelection.tools.some(
     (tool) => tool.name === requestedForcedTool
   )

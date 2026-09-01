@@ -73,6 +73,13 @@ test('short confirmation inherits the immediately preceding domain', () => {
   assert.ok(selected.includes('get_tasks'))
   assert.ok(selected.includes('delete_task'))
   assert.ok(!selected.includes('delete_transaction'))
+
+  const transactionConfirmation = names('confirm', [
+    'Remove the Kim Sing Chicken Rice transaction.',
+    'I will permanently delete the S$4.50 Food transaction. Confirm?',
+  ])
+  assert.ok(transactionConfirmation.includes('get_month_transactions'))
+  assert.ok(transactionConfirmation.includes('delete_transaction'))
 })
 
 test('only explicit non-destructive commands force a first-round tool call', () => {
@@ -91,6 +98,20 @@ test('confirmed destructive follow-up forces the action tool', () => {
     ]),
     true
   )
+  assert.equal(
+    isExplicitToolRequest('confirm', [
+      'Remove the Kim Sing Chicken Rice transaction.',
+      'I will permanently delete it. Confirm?',
+    ]),
+    true
+  )
+  assert.equal(
+    forcedToolNameForRequest('confirm', [
+      'Remove the Kim Sing Chicken Rice transaction.',
+      'I will permanently delete the S$4.50 Food transaction. Confirm?',
+    ]),
+    'get_month_transactions'
+  )
 })
 
 test('exact forcing is limited to requests with enough identifying detail', () => {
@@ -99,6 +120,10 @@ test('exact forcing is limited to requests with enough identifying detail', () =
   assert.equal(forcedToolNameForRequest('Remind me tomorrow at 9am to call the bank'), 'create_reminder')
   assert.equal(forcedToolNameForRequest('Play Deep Focus on Spotify'), 'spotify_play')
   assert.equal(forcedToolNameForRequest('Take a screenshot'), 'pc_run_action')
+  assert.equal(
+    forcedToolNameForRequest("Log today's spending, see my email"),
+    'search_email'
+  )
   assert.equal(forcedToolNameForRequest('Log lunch'), null)
   assert.equal(forcedToolNameForRequest('Create a task'), null)
   assert.equal(forcedToolNameForRequest('Should I log S$5.70 for lunch?'), null)

@@ -103,7 +103,7 @@ const DOMAIN_PATTERNS: Readonly<Record<ToolDomain, readonly RegExp[]>> = {
 }
 
 const FOLLOW_UP =
-  /^(?:(?:yes|yeah|yep|yup|ok|okay|sure)[,! ]+(?:do it|go ahead|please do)|yes|yeah|yep|yup|ok|okay|sure|do it|go ahead|that one|this one|it|please do)[.! ]*$/i
+  /^(?:(?:yes|yeah|yep|yup|ok|okay|sure)[,! ]+(?:do it|go ahead|please do)|yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|do it|go ahead|that one|this one|it|please do)[.! ]*$/i
 
 function matchDomains(text: string): ToolDomain[] {
   return (Object.keys(DOMAIN_PATTERNS) as ToolDomain[]).filter((domain) =>
@@ -173,10 +173,34 @@ export function isExplicitToolRequest(
  * detail are present. Broader imperatives still get max reasoning effort, but
  * remain on automatic choice so the model can ask a missing-detail question.
  */
-export function forcedToolNameForRequest(userText: string): string | null {
+export function forcedToolNameForRequest(
+  userText: string,
+  recentConversation: readonly string[] = []
+): string | null {
   const text = userText.trim()
   const hasAmount =
     /(?:^|\s)(?:s\$|sgd|\$)?\s*\d+(?:\.\d{1,2})?(?:\s|$)/i.test(text)
+
+  // A confirmed delete still needs the record id. Force the relevant lookup
+  // first; after its result the model has everything required to call delete.
+  if (FOLLOW_UP.test(text)) {
+    const context = recentConversation.slice(-2).join('\n')
+    if (/\b(?:delete|remove)\b/i.test(context) && /\btransaction\b/i.test(context)) {
+      return 'get_month_transactions'
+    }
+  }
+
+  // A request to derive transactions from Gmail must start by reading Gmail.
+  // Without a known amount, forcing log_transaction would be premature; leaving
+  // the choice entirely to the model has caused it to claim the tools are
+  // unavailable even though both routed groups were present.
+  if (
+    /\b(?:email|emails|gmail|inbox|mail)\b/i.test(text) &&
+    /\b(?:log|record|add)\b/i.test(text) &&
+    /\b(?:spending|expense|expenses|transaction|transactions)\b/i.test(text)
+  ) {
+    return 'search_email'
+  }
 
   if (
     hasAmount &&
