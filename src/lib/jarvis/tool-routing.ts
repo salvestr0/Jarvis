@@ -65,7 +65,7 @@ export const CORE_TOOL_NAMES = ['web_search', 'remember', 'forget'] as const
 
 const DOMAIN_PATTERNS: Readonly<Record<ToolDomain, readonly RegExp[]>> = {
   finance: [
-    /\b(?:money|finance|financial|spent|spend|spending|expense|income|transaction|budget|saving|savings|net worth|cash balance)\b/i,
+    /\b(?:money|finance|financial|spent|spend|spendings?|expense|income|transaction|budget|saving|savings|net worth|cash balance)\b/i,
     /\b(?:bank|cash|brokerage|wallet) account\b/i,
     /(?:^|\s)(?:s\$|sgd|\$)\s*\d/i,
     /\b\d+(?:\.\d{1,2})?\s*(?:dollars?|bucks?)\b/i,
@@ -203,7 +203,7 @@ export function forcedToolNameForRequest(
   if (
     /\b(?:email|emails|gmail|inbox|mail)\b/i.test(intentText) &&
     /\b(?:log|record|add|save)\b/i.test(intentText) &&
-    /\b(?:spending|expense|expenses|transaction|transactions|charges)\b/i.test(intentText)
+    /\b(?:spendings?|expense|expenses|transaction|transactions|charges)\b/i.test(intentText)
   ) {
     return 'search_email'
   }
