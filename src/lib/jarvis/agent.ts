@@ -20,7 +20,6 @@ import {
 import { getBotDb } from '@/lib/jarvis/db'
 import { executeTool } from '@/lib/jarvis/execute'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
-import { requestOptionsForIteration } from '@/lib/jarvis/llm-request'
 import {
   getLlmClient,
   LLM_FALLBACK_MODEL,
@@ -233,9 +232,20 @@ export async function runJarvis(userText: string): Promise<string> {
         system: buildSystemPrompt(facts),
         tools: toolSelection.tools as Anthropic.Tool[],
         messages,
-        // A forced first call has no thinking block to replay. Keep thinking
-        // disabled for the whole turn so DeepSeek accepts later tool rounds.
-        ...requestOptionsForIteration(i, forcedToolName, explicitToolRequest),
+        // DeepSeek rejects tool_choice while thinking is enabled. Exact,
+        // low-ambiguity actions therefore use a forced non-thinking first
+        // call; subsequent rounds return to high-effort thinking. Broader
+        // action requests get max effort without forcing a tool.
+        ...(i === 0 && forcedToolName
+          ? { thinking: { type: 'disabled' as const } }
+          : {
+              output_config: {
+                effort: i === 0 && explicitToolRequest ? ('max' as const) : ('high' as const),
+              },
+            }),
+        ...(i === 0 && forcedToolName
+          ? { tool_choice: { type: 'tool' as const, name: forcedToolName } }
+          : {}),
       })
     } catch (error) {
       await logLlmCall(db, {
