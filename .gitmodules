@@ -1,4 +1,0 @@
-[submodule "agent-service/vendor/hermes-agent"]
-	path = agent-service/vendor/hermes-agent
-	url = https://github.com/NousResearch/hermes-agent.git
-	ignore = dirty

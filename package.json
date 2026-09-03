@@ -21,8 +21,7 @@
     "spotify:auth": "node scripts/spotify-auth.mjs",
     "pc:setup": "node scripts/pc-agent-setup.mjs",
     "pc:agent": "node pc-agent/agent.mjs",
-    "agent:verify": "python -m unittest discover -s agent-service/tests -v && python -m compileall -q agent-service/api agent-service/jarvis_agent",
-    "verify": "npm run check:actions && tsc --noEmit && npm test && npm run agent:verify && npm run build"
+    "verify": "npm run check:actions && tsc --noEmit && npm test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -6,7 +6,7 @@
  * bot actually uses are typed — Telegram sends far more.
  */
 
-export type IncomingMessage = { updateId: number; chatId: number; fromId: number } & (
+export type IncomingMessage = { chatId: number; fromId: number } & (
   | { kind: 'text'; text: string }
   | { kind: 'voice'; fileId: string; duration: number }
 )
@@ -25,7 +25,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function parseUpdate(body: unknown): IncomingMessage | null {
   if (!isRecord(body)) return null
-  if (typeof body.update_id !== 'number' || !Number.isSafeInteger(body.update_id)) return null
 
   // Only `message` — an `edited_message` re-delivers old text and answering
   // it twice would double-log expenses.
@@ -42,7 +41,7 @@ export function parseUpdate(body: unknown): IncomingMessage | null {
   // financial data to everyone in it, even when the speaker is the owner.
   if (chat.type !== 'private') return null
 
-  const base = { updateId: body.update_id, chatId: chat.id, fromId: from.id }
+  const base = { chatId: chat.id, fromId: from.id }
 
   if (typeof message.text === 'string') {
     const text = message.text.trim()
