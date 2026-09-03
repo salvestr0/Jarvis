@@ -4,14 +4,7 @@
     "api/index.py": {
       "maxDuration": 60,
       "includeFiles": "vendor/hermes-agent/**",
-      "excludeFiles": [
-        "vendor/hermes-agent/.git/**",
-        "vendor/hermes-agent/tests/**",
-        "vendor/hermes-agent/docs/**",
-        "vendor/hermes-agent/website/**",
-        "vendor/hermes-agent/apps/**",
-        "vendor/hermes-agent/screenshots/**"
-      ]
+      "excludeFiles": "{vendor/hermes-agent/.git/**,vendor/hermes-agent/tests/**,vendor/hermes-agent/docs/**,vendor/hermes-agent/website/**,vendor/hermes-agent/apps/**,vendor/hermes-agent/screenshots/**}"
     }
   },
   "rewrites": [
