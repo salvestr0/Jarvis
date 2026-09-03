@@ -64,6 +64,12 @@ test('multi-domain requests receive both small tool groups', () => {
   assert.ok(selected.includes('log_transaction'))
   assert.ok(!selected.includes('spotify_play'))
 
+  const userWording = "log yesterday's and today spendings, check my email"
+  const spendings = names(userWording)
+  assert.ok(spendings.includes('search_email'))
+  assert.ok(spendings.includes('log_transaction'))
+  assert.equal(forcedToolNameForRequest(userWording), 'search_email')
+
   const retry = names('try again', [
     "Log today's spending, see my email.",
     "I found the charges, but I couldn't save them to the tracker.",
