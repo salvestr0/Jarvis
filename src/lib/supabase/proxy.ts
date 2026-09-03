@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { getSupabasePublishableKey, getSupabaseUrl, isAllowedEmail } from './env'
+import { isPublicServerPath } from './public-paths'
 
 /**
  * Paths reachable without being logged in.
@@ -10,18 +11,10 @@ import { getSupabasePublishableKey, getSupabaseUrl, isAllowedEmail } from './env
  * it authenticates itself with a bearer secret inside the route handler.
  * `/api/telegram` is the same story: Telegram authenticates itself with the
  * X-Telegram-Bot-Api-Secret-Token header inside the route handler.
- * Being listed here does NOT make them public: both routes reject requests
- * without the correct secret, and refuse to run at all when unconfigured.
+ * `/api/agent` requires its own long bearer secret from the Python service.
+ * Being listed here does NOT make them public: every server endpoint rejects
+ * requests without its own secret, and refuses to run when unconfigured.
  */
-// `/api/reminders` likewise: the deliver endpoint requires Bearer CRON_SECRET.
-const PUBLIC_PATHS = ['/login', '/auth', '/api/cron', '/api/telegram', '/api/reminders']
-
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  )
-}
-
 /**
  * Refreshes the auth session on every request and guards private routes.
  *
@@ -73,7 +66,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (!user && !isPublicPath(pathname)) {
+  if (!user && !isPublicServerPath(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
