@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { after } from 'next/server'
+import { randomUUID } from 'node:crypto'
 
 import { runJarvis } from '@/lib/jarvis/agent'
+import { getBotDb } from '@/lib/jarvis/db'
+import { loadHistory, saveTurn } from '@/lib/jarvis/history'
+import { runHermesAgent } from '@/lib/jarvis/hermes-client'
+import { prepareTelegramDelivery } from '@/lib/jarvis/telegram-delivery'
+import { claimTelegramUpdate, finishTelegramUpdate } from '@/lib/jarvis/update-lease'
 import { downloadFile, sendMessage, sendTyping } from '@/lib/telegram/api'
 import { chunkTelegramMessage } from '@/lib/telegram/format'
 import { parseUpdate } from '@/lib/telegram/update'
@@ -53,8 +59,37 @@ export async function POST(request: NextRequest) {
   if (String(update.fromId) !== allowedId) return NextResponse.json({ ok: true })
 
   const { chatId } = update
+  const receivedAt = Date.now()
+
+  let delivery: {
+    db: Awaited<ReturnType<typeof getBotDb>>
+    leaseToken: string
+  } | null
+  try {
+    delivery = await prepareTelegramDelivery<Awaited<ReturnType<typeof getBotDb>>>(
+      update.updateId,
+      {
+        createLeaseToken: randomUUID,
+        getDb: getBotDb,
+        claim: claimTelegramUpdate,
+      }
+    )
+  } catch (error) {
+    console.error(
+      '[telegram] could not claim update:',
+      error instanceof Error ? error.message : 'unknown'
+    )
+    // Do not acknowledge an unclaimed update. Telegram can safely redeliver it.
+    return NextResponse.json({ error: 'Temporary failure.' }, { status: 503 })
+  }
+  if (!delivery) return NextResponse.json({ ok: true })
+
+  const { db, leaseToken } = delivery
 
   after(async () => {
+    let succeeded = false
+    let failure = 'unknown'
+
     try {
       await sendTyping(chatId)
 
@@ -65,6 +100,7 @@ export async function POST(request: NextRequest) {
             chatId,
             `That note is ${update.duration}s — a bit long for me. Send something under ${MAX_VOICE_SECONDS / 60} minutes.`
           )
+          succeeded = true
           return
         }
         text = await transcribeVoice(await downloadFile(update.fileId))
@@ -76,19 +112,61 @@ export async function POST(request: NextRequest) {
         text = update.text
       }
 
-      const reply = await runJarvis(text)
+      const backend = process.env.JARVIS_AGENT_BACKEND ?? 'legacy'
+      let reply: string
+      if (backend === 'hermes') {
+        const serviceUrl = process.env.AGENT_SERVICE_URL
+        const agentSecret = process.env.AGENT_SERVICE_SECRET
+        if (!serviceUrl || !agentSecret) {
+          throw new Error('Hermes agent backend is not configured.')
+        }
+        const history = await loadHistory(db)
+        reply = await runHermesAgent(
+          { text, telegramUpdateId: update.updateId, history },
+          { serviceUrl, secret: agentSecret }
+        )
+      } else if (backend === 'legacy') {
+        reply = await runJarvis(text)
+      } else {
+        throw new Error('Unknown Jarvis agent backend.')
+      }
       for (const chunk of chunkTelegramMessage(reply)) {
         await sendMessage(chatId, chunk)
       }
+      if (backend === 'hermes') {
+        try {
+          await saveTurn(db, text, reply, receivedAt)
+        } catch (historyError) {
+          console.error(
+            '[telegram] could not save Hermes history:',
+            historyError instanceof Error ? historyError.message : 'unknown'
+          )
+        }
+      }
+      succeeded = true
     } catch (error) {
+      failure = error instanceof Error ? error.message : 'unknown'
       console.error(
         '[telegram] failed:',
-        error instanceof Error ? error.message : error
+        failure
       )
       try {
-        await sendMessage(chatId, 'Something went wrong with that one — check the Vercel logs.')
+        await sendMessage(chatId, "I couldn't finish that. Please try again in a moment.")
       } catch {
         // Even the apology failed; the logs above are all that's left.
+      }
+    } finally {
+      try {
+        const finished = await finishTelegramUpdate(db, update.updateId, leaseToken, {
+          succeeded,
+          error: succeeded ? undefined : failure,
+        })
+        if (!finished) console.error('[telegram] lost the update lease before finishing.')
+      } catch (finishError) {
+        console.error(
+          '[telegram] could not finish update lease:',
+          finishError instanceof Error ? finishError.message : 'unknown'
+        )
       }
     }
   })

@@ -11,6 +11,10 @@ import type {
   MonthSummary,
   TransactionRow,
 } from '@/lib/types'
+import {
+  createIdempotentTransaction,
+  type DurableTransactionIdentity,
+} from './idempotent-transaction'
 
 /**
  * All money data access lives here — never inside a page or component.
@@ -272,8 +276,9 @@ export type TransactionInput = {
 
 export async function createTransaction(
   input: TransactionInput,
-  db?: Db
-): Promise<void> {
+  db?: Db,
+  identity?: DurableTransactionIdentity
+): Promise<void | { id: string; created: boolean }> {
   const supabase = db?.client ?? (await createClient())
 
   let userId = db?.userId
@@ -283,6 +288,15 @@ export async function createTransaction(
     } = await supabase.auth.getUser()
     if (!user) throw new Error('Not signed in.')
     userId = user.id
+  }
+
+  if (identity) {
+    return createIdempotentTransaction(
+      supabase,
+      userId,
+      { ...input, currency: 'SGD' },
+      identity
+    )
   }
 
   // user_id must be set explicitly: the RLS `with check` rule rejects any row
