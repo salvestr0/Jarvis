@@ -6,7 +6,7 @@ import { runJarvis } from '@/lib/jarvis/agent'
 import { getBotDb } from '@/lib/jarvis/db'
 import { loadHistory, saveTurn } from '@/lib/jarvis/history'
 import { runHermesAgent } from '@/lib/jarvis/hermes-client'
-import { prepareTelegramDelivery } from '@/lib/jarvis/telegram-delivery'
+import { prepareJarvisDelivery } from '@/lib/jarvis/telegram-delivery'
 import { claimTelegramUpdate, finishTelegramUpdate } from '@/lib/jarvis/update-lease'
 import { downloadFile, sendMessage, sendTyping } from '@/lib/telegram/api'
 import { chunkTelegramMessage } from '@/lib/telegram/format'
@@ -60,13 +60,19 @@ export async function POST(request: NextRequest) {
 
   const { chatId } = update
   const receivedAt = Date.now()
+  const backend = process.env.JARVIS_AGENT_BACKEND ?? 'legacy'
 
-  let delivery: {
-    db: Awaited<ReturnType<typeof getBotDb>>
-    leaseToken: string
-  } | null
+  let delivery:
+    | { backend: 'legacy' }
+    | {
+        backend: 'hermes'
+        db: Awaited<ReturnType<typeof getBotDb>>
+        leaseToken: string
+      }
+    | null
   try {
-    delivery = await prepareTelegramDelivery<Awaited<ReturnType<typeof getBotDb>>>(
+    delivery = await prepareJarvisDelivery<Awaited<ReturnType<typeof getBotDb>>>(
+      backend,
       update.updateId,
       {
         createLeaseToken: randomUUID,
@@ -83,8 +89,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Temporary failure.' }, { status: 503 })
   }
   if (!delivery) return NextResponse.json({ ok: true })
-
-  const { db, leaseToken } = delivery
 
   after(async () => {
     let succeeded = false
@@ -112,30 +116,27 @@ export async function POST(request: NextRequest) {
         text = update.text
       }
 
-      const backend = process.env.JARVIS_AGENT_BACKEND ?? 'legacy'
       let reply: string
-      if (backend === 'hermes') {
+      if (delivery.backend === 'hermes') {
         const serviceUrl = process.env.AGENT_SERVICE_URL
         const agentSecret = process.env.AGENT_SERVICE_SECRET
         if (!serviceUrl || !agentSecret) {
           throw new Error('Hermes agent backend is not configured.')
         }
-        const history = await loadHistory(db)
+        const history = await loadHistory(delivery.db)
         reply = await runHermesAgent(
           { text, telegramUpdateId: update.updateId, history },
           { serviceUrl, secret: agentSecret }
         )
-      } else if (backend === 'legacy') {
-        reply = await runJarvis(text)
       } else {
-        throw new Error('Unknown Jarvis agent backend.')
+        reply = await runJarvis(text)
       }
       for (const chunk of chunkTelegramMessage(reply)) {
         await sendMessage(chatId, chunk)
       }
-      if (backend === 'hermes') {
+      if (delivery.backend === 'hermes') {
         try {
-          await saveTurn(db, text, reply, receivedAt)
+          await saveTurn(delivery.db, text, reply, receivedAt)
         } catch (historyError) {
           console.error(
             '[telegram] could not save Hermes history:',
@@ -156,11 +157,17 @@ export async function POST(request: NextRequest) {
         // Even the apology failed; the logs above are all that's left.
       }
     } finally {
+      if (delivery.backend === 'legacy') return
       try {
-        const finished = await finishTelegramUpdate(db, update.updateId, leaseToken, {
-          succeeded,
-          error: succeeded ? undefined : failure,
-        })
+        const finished = await finishTelegramUpdate(
+          delivery.db,
+          update.updateId,
+          delivery.leaseToken,
+          {
+            succeeded,
+            error: succeeded ? undefined : failure,
+          }
+        )
         if (!finished) console.error('[telegram] lost the update lease before finishing.')
       } catch (finishError) {
         console.error(

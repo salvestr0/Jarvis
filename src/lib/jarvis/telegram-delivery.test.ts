@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { prepareTelegramDelivery } from './telegram-delivery.ts'
+import { prepareJarvisDelivery, prepareTelegramDelivery } from './telegram-delivery.ts'
 
 test('claims the update before returning work for background dispatch', async () => {
   const events: string[] = []
@@ -45,4 +45,22 @@ test('does not dispatch a duplicate and propagates claim failures for Telegram r
     }),
     /database unavailable/
   )
+})
+
+test('legacy backend stays operational before the agent migration is applied', async () => {
+  let touchedDatabase = false
+  const result = await prepareJarvisDelivery('legacy', 42, {
+    createLeaseToken: () => 'lease-1',
+    getDb: async () => {
+      touchedDatabase = true
+      return { userId: 'user-1', client: {} }
+    },
+    claim: async () => {
+      touchedDatabase = true
+      return true
+    },
+  })
+
+  assert.deepEqual(result, { backend: 'legacy' })
+  assert.equal(touchedDatabase, false)
 })

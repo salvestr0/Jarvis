@@ -18,3 +18,18 @@ export async function prepareTelegramDelivery<Db>(
   const claimed = await deps.claim(db, updateId, leaseToken)
   return claimed ? { db, leaseToken } : null
 }
+
+export async function prepareJarvisDelivery<Db>(
+  backend: string,
+  updateId: number,
+  deps: TelegramDeliveryDeps<Db>
+): Promise<
+  | { backend: 'legacy' }
+  | { backend: 'hermes'; db: Db; leaseToken: string }
+  | null
+> {
+  if (backend === 'legacy') return { backend }
+  if (backend !== 'hermes') throw new Error('Unknown Jarvis agent backend.')
+  const delivery = await prepareTelegramDelivery(updateId, deps)
+  return delivery ? { backend, ...delivery } : null
+}
