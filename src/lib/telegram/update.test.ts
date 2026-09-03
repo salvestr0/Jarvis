@@ -20,6 +20,7 @@ function validUpdate(overrides: Record<string, unknown> = {}) {
 test('accepts a plain private text message', () => {
   const parsed = parseUpdate(validUpdate())
   assert.deepEqual(parsed, {
+    updateId: 1,
     chatId: 12345,
     fromId: 12345,
     kind: 'text',
@@ -40,6 +41,7 @@ test('accepts a voice note and carries its file id and duration', () => {
     })
   )
   assert.deepEqual(parsed, {
+    updateId: 1,
     chatId: 12345,
     fromId: 12345,
     kind: 'voice',
@@ -89,4 +91,11 @@ test('rejects malformed bodies instead of throwing', () => {
     parseUpdate(validUpdate({ from: { id: 'not-a-number' } })),
     null
   )
+})
+
+test('rejects updates without a numeric update id', () => {
+  const missing = validUpdate()
+  delete (missing as { update_id?: number }).update_id
+  assert.equal(parseUpdate(missing), null)
+  assert.equal(parseUpdate({ ...validUpdate(), update_id: '1' }), null)
 })

@@ -16,6 +16,7 @@ import {
 import { sendPhoto } from '@/lib/telegram/api'
 import { formatMoney, monthlyEquivalentCents, parseMoney } from '@/lib/money'
 import type { Db } from '@/lib/queries/db'
+import type { DurableTransactionIdentity } from '@/lib/queries/idempotent-transaction'
 import { formatSgt, parseSgt, validateDueAt } from '@/lib/reminders'
 import { alertCrossed, formatUsdMicros, parseUsdToMicros } from '@/lib/alerts'
 import { fetchCryptoPrices, fetchStockPrices } from '@/lib/prices'
@@ -243,7 +244,8 @@ function isoOrThrow(value: string, key: string): string {
 export async function executeTool(
   name: string,
   raw: unknown,
-  db: Db
+  db: Db,
+  context: { transactionIdentity?: DurableTransactionIdentity } = {}
 ): Promise<string> {
   const input = inputOf(raw)
 
@@ -841,7 +843,7 @@ export async function executeTool(
 
       const occurred_on = pastOrTodayDate(input, 'date') ?? todayISO()
 
-      await createTransaction(
+      const transaction = await createTransaction(
         {
           occurred_on,
           direction,
@@ -850,9 +852,12 @@ export async function executeTool(
           account_id: null,
           note,
         },
-        db
+        db,
+        context.transactionIdentity
       )
       return JSON.stringify({
+        created: transaction && 'created' in transaction ? transaction.created : true,
+        transaction_id: transaction && 'id' in transaction ? transaction.id : null,
         logged: {
           date: occurred_on,
           direction,
