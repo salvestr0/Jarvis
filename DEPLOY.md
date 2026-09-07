@@ -137,10 +137,57 @@ runs **once per day**, which is exactly what this needs.
 
 ---
 
-## 7. The Telegram bot (Phase 2)
+## 7. Hermes Cloud + Telegram (Phase 2)
 
-Four more environment variables (all environments, same as step 4 — and the
-same rule applies: **server-only, never `NEXT_PUBLIC_`**):
+The production assistant runs on Hermes Cloud. Vercel keeps the dashboard,
+Supabase access, and a private MCP endpoint with the 15 core Jarvis tools.
+
+Generate a 32-byte secret and add it to Vercel for Production and Preview:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+| Name | Where it goes |
+|---|---|
+| `JARVIS_MCP_SECRET` | Vercel and the Hermes MCP `Authorization` header |
+
+After deploying, verify the unauthenticated endpoint returns `401`. Then add
+this HTTP MCP server to the Hermes Cloud profile and test it before enabling
+Telegram:
+
+```yaml
+mcp_servers:
+  jarvis:
+    url: "https://jarvis-theta-umber-27.vercel.app/api/mcp"
+    headers:
+      Authorization: "Bearer ${JARVIS_MCP_SECRET}"
+    sampling:
+      enabled: false
+    tools:
+      prompts: false
+      resources: false
+```
+
+Keep the secret in Hermes's `.env`, not literally in `config.yaml`. A successful
+MCP test must list exactly 15 tools and no delete/archive capability.
+
+Configure Hermes Telegram with the existing bot token and only your numeric
+user id. A Telegram bot token can have only one active consumer, so cut over in
+this order:
+
+1. Deploy and test `/api/mcp` without changing Telegram.
+2. Add and test the MCP server on Hermes Cloud.
+3. Disable the Vercel webhook with Telegram `deleteWebhook`.
+4. Configure the existing bot token and allowed user id on Hermes Cloud.
+5. Send read-only smoke tests first: net worth, month summary, tasks.
+6. Log one small test transaction and verify it in the dashboard.
+
+The former Vercel Telegram route remains as a rollback path. Do not run it at
+the same time as Hermes Telegram. To roll back, disable Telegram on Hermes and
+rerun `npm run telegram:setup`.
+
+Legacy Vercel bot variables (needed only for rollback):
 
 | Name | Where it comes from |
 |---|---|
@@ -149,23 +196,9 @@ same rule applies: **server-only, never `NEXT_PUBLIC_`**):
 | `TELEGRAM_WEBHOOK_SECRET` | Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `TELEGRAM_USER_ID` | Message @userinfobot on Telegram — your numeric id |
 
-Then:
-
-1. `npm run db:migrate` from your machine (migration `0006_chat.sql` — the
-   bot's conversation memory).
-2. Add the four variables to Vercel and deploy.
-3. `npm run telegram:setup` — registers the webhook at
-   `<your-app>/api/telegram` with the secret. It prints `getWebhookInfo` so
-   you can see it stuck.
-4. Message your bot: *"what's my net worth?"*, *"log $12 lunch"*.
-
-The route answers Telegram instantly and finishes the Claude call afterwards
-(`after()` + Vercel Fluid Compute) — if replies ever stop mid-sentence, check
-that Fluid Compute is enabled in the project settings before suspecting code.
-
-If the bot doesn't reply: **Deployments → Functions** logs, lines starting
-`[telegram]`. `getWebhookInfo` (rerun the setup script) shows Telegram's side
-of the story, including its last delivery error.
+Conversation history after cutover lives in Hermes Cloud. Existing
+`chat_messages` rows stay in Supabase as legacy history; they are not silently
+copied into the new agent session.
 
 ---
 
