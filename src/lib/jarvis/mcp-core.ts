@@ -39,6 +39,8 @@ const CORE_MCP_TOOL_NAMES = [
   'get_tasks',
   'get_jobs',
   'get_projects',
+  'search_email',
+  'get_email',
   'log_transaction',
   'create_task',
   'set_task_done',

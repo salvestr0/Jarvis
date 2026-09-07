@@ -140,7 +140,8 @@ runs **once per day**, which is exactly what this needs.
 ## 7. Hermes Cloud + Telegram (Phase 2)
 
 The production assistant runs on Hermes Cloud. Vercel keeps the dashboard,
-Supabase access, and a private MCP endpoint with the 15 core Jarvis tools.
+Supabase access, and a private MCP endpoint with 17 constrained Jarvis tools:
+the 15 core finance/task tools plus read-only Gmail search and retrieval.
 
 Generate a 32-byte secret and add it to Vercel for Production and Preview:
 
@@ -170,7 +171,8 @@ mcp_servers:
 ```
 
 Keep the secret in Hermes's `.env`, not literally in `config.yaml`. A successful
-MCP test must list exactly 15 tools and no delete/archive capability.
+MCP test must list exactly 17 tools and no delete/archive or email-write
+capability.
 
 Configure Hermes Telegram with the existing bot token and only your numeric
 user id. A Telegram bot token can have only one active consumer, so cut over in
