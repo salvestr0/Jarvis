@@ -57,19 +57,20 @@ not a rewrite.
 
 ---
 
-## The voice — Telegram + Claude
+## The voice — Telegram + Hermes Cloud
 
-Phase 2 is live: a Telegram bot backed by **Claude Opus 5** with tool access to
-the same query layer the web app uses. Send *"log $12 lunch"* or *"what's my
-net worth?"* and it reads or writes the same database.
+Phase 2 runs as a Hermes Cloud agent. Hermes owns Telegram, model sessions,
+memory, voice transcription, web search, and routines. The Vercel app remains
+the deterministic finance backend and exposes a bearer-protected MCP endpoint
+at `/api/mcp`. Send *"log $12 lunch"* or *"what's my net worth?"* and Hermes
+calls the same query layer as the dashboard.
 
 How a message flows:
 
 ```
-Telegram → POST /api/telegram          secret-token + user-id check, ack 200
-         → after()                     work continues past the response
-         → Claude Opus 5 tool loop     15 tools over src/lib/queries/*
-         → sendMessage                 plain-text reply, chunked at 4096
+Telegram → Hermes Cloud gateway       user-id allowlist, sessions, voice
+         → Jarvis MCP on Vercel       bearer-authenticated, 15 tools
+         → src/lib/queries/*          scoped deterministic reads and writes
 ```
 
 The tools: `get_net_worth`, `get_net_worth_history`, `get_month_summary`,
@@ -79,15 +80,14 @@ The tools: `get_net_worth`, `get_net_worth_history`, `get_month_summary`,
 over an existing function in `src/lib/queries/` — the payoff of never letting
 data access live inside a page.
 
-Security is the same fail-closed posture as the rest of the app: the route
-returns 503 until its secrets are configured, rejects any request without the
-webhook secret Telegram was registered with, and silently drops messages from
-any Telegram account other than yours. The bot runs on the service-role client,
-so every query it makes is scoped by `user_id` in code (`src/lib/queries/db.ts`
-documents the contract). Conversation memory lives in the `chat_messages`
-table — final text only, last ~20 turns replayed for context.
+Security stays fail-closed: `/api/mcp` refuses requests unless
+`JARVIS_MCP_SECRET` is configured and the caller presents the exact bearer
+token. Hermes separately allowlists the Telegram user id. Destructive delete
+and archive operations are not exposed through MCP. Database calls still use
+the single-user service-role adapter and scope every query by `user_id`.
 
-Set it up with `npm run telegram:setup` after deploying (see DEPLOY.md).
+The old `/api/telegram` DeepSeek loop remains available only as a rollback
+path during migration. See DEPLOY.md for the cutover sequence.
 
 ---
 
