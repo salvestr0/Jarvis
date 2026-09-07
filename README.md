@@ -69,9 +69,13 @@ How a message flows:
 
 ```
 Telegram → Hermes Cloud gateway       user-id allowlist, sessions, voice
-         → Jarvis MCP on Vercel       bearer-authenticated, 15 tools
+         → Jarvis MCP on Vercel       bearer-authenticated, 17 tools
          → src/lib/queries/*          scoped deterministic reads and writes
 ```
+
+The MCP surface includes the 15 core finance/task tools plus read-only Gmail
+search and message retrieval. Email sending, drafting, deletion, and mutation
+are not exposed to Hermes.
 
 The tools: `get_net_worth`, `get_net_worth_history`, `get_month_summary`,
 `get_month_transactions`, `get_recurring`, `get_holdings`, `get_goals`,
