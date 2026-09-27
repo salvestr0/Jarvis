@@ -31,6 +31,18 @@ test('MCP authorization fails closed and accepts only the exact bearer secret', 
   )
 })
 
+test('MCP authorization accepts a separate desktop secret without changing the cloud secret', () => {
+  const cloudSecret = 'c'.repeat(32)
+  const desktopSecret = 'd'.repeat(32)
+  const header = (secret: string) => new Headers({ authorization: `Bearer ${secret}` })
+
+  assert.equal(isAuthorizedMcpRequest(header(cloudSecret), cloudSecret, desktopSecret), true)
+  assert.equal(isAuthorizedMcpRequest(header(desktopSecret), cloudSecret, desktopSecret), true)
+  assert.equal(isAuthorizedMcpRequest(header(desktopSecret + 'x'), cloudSecret, desktopSecret), false)
+  assert.equal(isAuthorizedMcpRequest(header(desktopSecret), cloudSecret, 'short'), false)
+  assert.equal(isAuthorizedMcpRequest(header(desktopSecret), undefined, desktopSecret), false)
+})
+
 test('MCP catalog exposes only the documented core Jarvis tools in MCP format', () => {
   const expectedNames = [
     'get_net_worth',

@@ -9,7 +9,8 @@ export type JarvisToolExecutor = (
 
 export function isAuthorizedMcpRequest(
   headers: Headers,
-  configuredSecret: string | undefined
+  configuredSecret: string | undefined,
+  desktopSecret?: string
 ): boolean {
   if (!configuredSecret || configuredSecret.length < 32) return false
 
@@ -17,9 +18,12 @@ export function isAuthorizedMcpRequest(
   const match = authorization?.match(/^Bearer[ \t]+(.+)$/i)
   if (!match) return false
 
-  const expected = Buffer.from(configuredSecret)
   const supplied = Buffer.from(match[1])
-  return expected.length === supplied.length && timingSafeEqual(expected, supplied)
+  return [configuredSecret, desktopSecret].some((secret) => {
+    if (!secret || secret.length < 32) return false
+    const expected = Buffer.from(secret)
+    return expected.length === supplied.length && timingSafeEqual(expected, supplied)
+  })
 }
 
 export type JarvisMcpTool = {
