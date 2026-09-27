@@ -61,7 +61,11 @@ const mcpHandler = createMcpHandler(
 )
 
 async function authorizedHandler(request: Request): Promise<Response> {
-  if (!isAuthorizedMcpRequest(request.headers, process.env.JARVIS_MCP_SECRET)) {
+  if (!isAuthorizedMcpRequest(
+    request.headers,
+    process.env.JARVIS_MCP_SECRET,
+    process.env.JARVIS_MCP_DESKTOP_SECRET
+  )) {
     return Response.json(
       { error: 'Unauthorized.' },
       {
